@@ -38,13 +38,14 @@ except ImportError:
     )
 
 # Market -> exchange code (exchange-calendars)
-MARKET_EXCHANGE = {"cn": "XSHG", "hk": "XHKG", "us": "XNYS", "jp": "XTKS", "kr": "XKRX", "tw": "XTAI"}
+MARKET_EXCHANGE = {"cn": "XSHG", "hk": "XHKG", "us": "XNYS", "ca": "XTSE", "jp": "XTKS", "kr": "XKRX", "tw": "XTAI"}
 
 # Market -> IANA timezone for "today"
 MARKET_TIMEZONE = {
     "cn": "Asia/Shanghai",
     "hk": "Asia/Hong_Kong",
     "us": "America/New_York",
+    "ca": "America/Toronto",
     "jp": "Asia/Tokyo",
     "kr": "Asia/Seoul",
     "tw": "Asia/Taipei",
@@ -61,6 +62,7 @@ _CLOSING_AUCTION_WINDOW_MINUTES = {
     "cn": 3,
     "hk": 10,
     "us": 5,
+    "ca": 5,
     "jp": 5,
     "kr": 10,
     "tw": 5,
@@ -135,13 +137,13 @@ def get_market_for_stock(code: str) -> Optional[str]:
 
     from data_provider import is_us_stock_code, is_us_index_code, is_hk_stock_code
 
+    suffix_market = get_suffix_market(code)
+    if suffix_market:
+        return suffix_market
     if is_us_stock_code(code) or is_us_index_code(code):
         return "us"
     if is_hk_stock_code(code):
         return "hk"
-    suffix_market = get_suffix_market(code)
-    if suffix_market:
-        return suffix_market
     # A-share: 6-digit numeric
     if code.isdigit() and len(code) == 6:
         return "cn"

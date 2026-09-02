@@ -94,6 +94,10 @@ class YfinanceFetcher(BaseFetcher):
         """
         return is_suffix_market_symbol(stock_code, "tw")
 
+    @staticmethod
+    def _is_ca_suffix_stock(stock_code: str) -> bool:
+        return is_suffix_market_symbol(stock_code, "ca")
+
     def _convert_stock_code(self, stock_code: str) -> str:
         """
         转换股票代码为 Yahoo Finance 格式
@@ -125,6 +129,11 @@ class YfinanceFetcher(BaseFetcher):
         if yf_symbol:
             logger.debug(f"识别为美股指数: {code} -> {yf_symbol}")
             return yf_symbol
+
+        # Canadian Yahoo symbols are already provider-ready. This must run
+        # before the US one-letter class-suffix rule (for example, SHOP.V).
+        if get_suffix_market(code) == "ca":
+            return code
 
         # 美股：1-5 个大写字母（可选 .X 后缀），原样返回
         if is_us_stock_code(code):
@@ -815,10 +824,11 @@ class YfinanceFetcher(BaseFetcher):
                 index_name=index_name,
             )
 
-        # 仅处理美股、港股或 JP/KR/TW suffix-only 股票
+        # 仅处理美股、港股或 CA/JP/KR/TW suffix-only 股票
         if not (
             self._is_us_stock(stock_code)
             or _is_hk_market(stock_code)
+            or self._is_ca_suffix_stock(stock_code)
             or self._is_jp_kr_suffix_stock(stock_code)
             or self._is_tw_suffix_stock(stock_code)
         ):

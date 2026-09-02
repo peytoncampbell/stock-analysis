@@ -347,6 +347,33 @@ export const systemConfigApi = {
     return data.stockCodes || [];
   },
 
+  getWatchlistQuotes: async (stockCodes: string[]): Promise<Array<{
+    stockCode: string;
+    stockName?: string;
+    market?: string;
+    currency?: string;
+    currentPrice?: number;
+    changePercent?: number;
+  }>> => {
+    const results = await Promise.allSettled(
+      stockCodes.map((code) => apiClient.get<Record<string, unknown>>(
+        `/api/v1/stocks/${encodeURIComponent(code)}/quote`,
+      )),
+    );
+    return results.flatMap((result) => (
+      result.status === 'fulfilled'
+        ? [toCamelCase<{
+            stockCode: string;
+            stockName?: string;
+            market?: string;
+            currency?: string;
+            currentPrice?: number;
+            changePercent?: number;
+          }>(result.value.data)]
+        : []
+    ));
+  },
+
   /**
    * 添加股票到自选队列
    */

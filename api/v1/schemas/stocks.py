@@ -25,6 +25,8 @@ class StockQuote(BaseModel):
     
     stock_code: str = Field(..., description="股票代码")
     stock_name: Optional[str] = Field(None, description="股票名称")
+    market: Optional[str] = Field(None, description="市场")
+    currency: Optional[str] = Field(None, description="报价币种")
     current_price: float = Field(..., description="当前价格")
     change: Optional[float] = Field(None, description="涨跌额")
     change_percent: Optional[float] = Field(None, description="涨跌幅 (%)")
@@ -177,7 +179,7 @@ class StockProfileEvidenceQuality(BaseModel):
 class StockProfileResponse(BaseModel):
     requested_code: str
     canonical_code: str
-    market: Literal["cn", "hk", "us", "jp", "kr", "tw"]
+    market: Literal["cn", "hk", "us", "ca", "jp", "kr", "tw"]
     as_of: str
     quote: StockProfileQuoteBlock
     history: StockProfileHistoryBlock

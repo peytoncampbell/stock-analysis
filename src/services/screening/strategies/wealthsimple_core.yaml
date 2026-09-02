@@ -1,0 +1,47 @@
+# Derived from AlphaSift revision 9f522747caafd3c0b1ddb7e14d5cf44c8580b6cf.
+# Licensed under Apache-2.0 and modified for daily_stock_analysis.
+name: wealthsimple_core
+display_name: Wealthsimple Core
+description: Liquid Canadian and U.S. stocks and ETFs available on major exchanges, ranked without China-specific filters
+version: "1.0"
+category: framework
+tags: [wealthsimple, canada, united_states, stocks, etfs]
+style:
+  risk_profile: balanced
+  holding_period: watchlist
+  execution_style: trend_confirmation
+  market_regime: [neutral, trend]
+  capital_profile: liquid
+  ui_badge: Wealthsimple
+
+screening:
+  enabled: true
+  market_scope: [wealthsimple, ca, us]
+  hard_filters:
+    exclude_st: false
+    price_min: 1
+    amount_min: 5000000
+    market_cap_min: 300000000
+    change_pct_min: -15
+    change_pct_max: 15
+  tech_weight: 0.35
+  factor_weights:
+    momentum: 0.30
+    stability: 0.25
+    liquidity: 0.20
+    activity: 0.15
+    size: 0.10
+  risk_profile:
+    chase_change_pct: 8.0
+    abnormal_volume_ratio: 5.0
+    high_turnover_rate: 12.0
+    low_llm_confidence: 0.45
+  portfolio_profile:
+    max_same_bucket: 3
+    concentration_penalty: 3.0
+  ranking_hints: |
+    Rank liquid Canadian and U.S. stocks and ETFs using North American market context.
+    Prefer durable momentum, stable price action, healthy liquidity, and diversification.
+    Treat Wealthsimple availability as likely rather than guaranteed unless a user has manually verified it.
+    For a dual-listed company, prefer the Canadian listing.
+  max_output: 10

@@ -1485,7 +1485,7 @@ For this feature, the product behavior is:
 | `/api/v1/analysis/tasks` | GET | Query task list |
 | `/api/v1/analysis/tasks/stream` | GET (SSE) | Subscribe to realtime task updates |
 | `/api/v1/analysis/status/{task_id}` | GET | Query task status |
-| `/api/v1/screening/screen/tasks` | POST | Submit a screening task (`SCREENING_ENABLED` must be enabled first); an optional anonymous `variant_seed` samples a bounded near-score combination per run while preserving materially superior candidates, filters, risk controls, and scores |
+| `/api/v1/screening/screen/tasks` | POST | Submit a screening task (`SCREENING_ENABLED` must be enabled first); choose `wealthsimple` with `wealthsimple_core` for the combined S&P 500 + TSX 60 stock/ETF universe, or `ca` / `us` separately; an optional anonymous `variant_seed` samples a bounded near-score combination per run while preserving materially superior candidates, filters, risk controls, and scores |
 | `/api/v1/screening/screen/tasks/{task_id}` | GET | Query screening task status and completed result |
 | `/api/v1/history` | GET | Query analysis history |
 | `/api/v1/history/{record_id}/share-image` | GET | Generate a historical-report PNG for browsers; requires an available `MD2IMG_ENGINE` |

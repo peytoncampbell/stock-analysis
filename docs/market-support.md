@@ -1,5 +1,14 @@
 # 市场支持与边界
 
+## 加拿大与 Wealthsimple CA + US 选股
+
+- 加拿大个股使用 Yahoo Finance 后缀：TSX `.TO`、TSXV `.V`、CSE `.CN`、Cboe Canada `.NE`。这些代码进入加拿大行情、`XTSE / America/Toronto` 交易日历、CAD 币种和加拿大市场 Prompt，不再按美股或 A 股处理。
+- Web 选股在英文界面默认提供 `Wealthsimple CA + US`，使用 `wealthsimple_core` 策略扫描 S&P 500、TSX 60 及少量主流美加 ETF；也可单独选择 Canada 或 United States。
+- 候选展示名称、provider symbol、交易所、币种、资产类型、资格状态和检查时间。`Likely` 只表示符合 Wealthsimple 公布的交易所/证券类型规则，不表示券商已逐只确认；最终下单前仍应在 Wealthsimple 搜索该证券。
+- 已知双重上市公司在组合池中优先加拿大代码。OTC、期权、共同基金、加密资产和其他非股票/ETF 产品不进入该策略。
+- `SCREENING_CA_TICKERS` / `SCREENING_US_TICKERS` 可覆盖默认股票池。Portfolio CSV 导入新增 `wealthsimple`（别名 `ws`），支持包含日期、Symbol、Buy/Sell、Quantity、Price、Currency 的成交导出；不完整的月结单活动 CSV 会跳过无法还原为成交的行。
+- 回滚：将 `SCREENING_ENABLED=false`，或在 Web 选择原有 A 股市场；删除 `wealthsimple_core` 不影响既有单股报告和历史数据。
+
 ## 日本/韩国个股 suffix-only MVP（Issue #1718，Refs #1718）
 
 当前阶段支持手动输入日本、韩国股票的 Yahoo Finance 后缀代码，进入既有个股分析、历史保存和基础报告展示链路。Web 自动补全内置一批常用日股/韩股种子索引，支持按 suffix 代码、中英文名称或常用别名搜索。

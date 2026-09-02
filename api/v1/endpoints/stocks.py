@@ -88,6 +88,7 @@ _STOCK_CODE_RE = re.compile(
     r"|\d{4,5}\.T"                            # Japan Yahoo suffix format
     r"|\d{6}\.(?:KS|KQ)"                     # Korea Yahoo suffix format
     r"|\d{4,6}\.(?:TW|TWO)"                  # Taiwan Yahoo suffix format
+    r"|[A-Z0-9][A-Z0-9-]{0,14}\.(?:TO|V|CN|NE)"  # Canadian Yahoo suffix format
     r"|[A-Z]{1,5}(?:\.(?:US|[A-Z]))?"         # US ticker
     r")$",
     re.IGNORECASE,
@@ -489,6 +490,8 @@ def get_stock_quote(stock_code: str) -> StockQuote:
         return StockQuote(
             stock_code=result.get("stock_code", stock_code),
             stock_name=result.get("stock_name"),
+            market=result.get("market"),
+            currency=result.get("currency"),
             current_price=result.get("current_price", 0.0),
             change=result.get("change"),
             change_percent=result.get("change_percent"),

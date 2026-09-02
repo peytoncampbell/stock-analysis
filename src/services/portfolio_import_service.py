@@ -35,6 +35,19 @@ class CsvParserSpec:
 
 DEFAULT_PARSER_SPECS: Tuple[CsvParserSpec, ...] = (
     CsvParserSpec(
+        broker="wealthsimple",
+        aliases=("ws",),
+        display_name="Wealthsimple",
+        column_hints={
+            "trade_date": ("Transaction Date", "Trade Date", "Settlement Date", "Date"),
+            "symbol": ("Symbol", "Ticker"),
+            "side": ("Transaction Type", "Activity Type", "Action", "Type"),
+            "quantity": ("Quantity", "Shares", "Units"),
+            "price": ("Price", "Price per Share", "Average Price"),
+            "trade_uid": ("Transaction ID", "Activity ID", "Order ID"),
+        },
+    ),
+    CsvParserSpec(
         broker="huatai",
         aliases=(),
         display_name="华泰",
@@ -345,13 +358,13 @@ class PortfolioImportService:
             return None
 
         fee = 0.0
-        for col in ("手续费", "佣金", "交易费", "规费", "过户费"):
+        for col in ("手续费", "佣金", "交易费", "规费", "过户费", "Fee", "Fees", "Commission"):
             value = self._parse_float(self._pick(row, col))
             if value is not None:
                 fee += value
 
         tax = 0.0
-        for col in ("印花税", "税费", "其他税费"):
+        for col in ("印花税", "税费", "其他税费", "Tax", "Taxes"):
             value = self._parse_float(self._pick(row, col))
             if value is not None:
                 tax += value
@@ -365,7 +378,7 @@ class PortfolioImportService:
             "委托编号",
             "流水号",
         )
-        currency = self._pick(row, "币种", "货币")
+        currency = self._pick(row, "币种", "货币", "Currency")
 
         return {
             "trade_date": trade_date_obj,
@@ -423,6 +436,10 @@ class PortfolioImportService:
         if compact in buy_exact:
             return "buy"
         if compact in sell_exact:
+            return "sell"
+        if compact.startswith("buy"):
+            return "buy"
+        if compact.startswith("sell"):
             return "sell"
         if "买入" in compact or compact.startswith("买"):
             return "buy"

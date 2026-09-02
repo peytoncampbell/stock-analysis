@@ -611,6 +611,41 @@ class SystemConfigService:
             self._build_setup_storage_check(effective_map),
         ]
 
+        if (effective_map.get("REPORT_LANGUAGE") or "").strip().lower() in {"en", "english"}:
+            stock_count = len(split_stock_list(effective_map.get("STOCK_LIST") or ""))
+            titles = {
+                "llm_primary": "LLM primary channel",
+                "llm_agent": "Agent channel",
+                "stock_list": "Selected stocks",
+                "notification": "Notification channel",
+                "storage": "Database / local storage",
+            }
+            messages = {
+                ("llm_primary", "configured"): "The primary LLM is configured.",
+                ("llm_primary", "needs_action"): "No usable primary LLM configuration was detected.",
+                ("llm_agent", "configured"): "A dedicated Agent model is configured.",
+                ("llm_agent", "inherited"): "The Agent will use the primary LLM channel.",
+                ("llm_agent", "needs_action"): "The Agent model configuration is unavailable or incomplete.",
+                ("stock_list", "configured"): f"{stock_count} stock{'s' if stock_count != 1 else ''} configured.",
+                ("stock_list", "needs_action"): "The selected-stock list is empty.",
+                ("notification", "configured"): "At least one notification channel is configured.",
+                ("notification", "optional"): "Notifications are optional for the first run.",
+                ("storage", "configured"): "The database path is available.",
+                ("storage", "needs_action"): "The database storage path is unavailable.",
+            }
+            next_steps = {
+                "llm_primary": "Configure LITELLM_MODEL, LLM_CHANNELS, LITELLM_CONFIG, or a provider API key.",
+                "llm_agent": "Configure a LiteLLM-compatible provider and set AGENT_LITELLM_MODEL.",
+                "stock_list": "Add at least one stock for the first test run.",
+                "notification": "Add a notification channel later if you want reports delivered automatically.",
+                "storage": "Check DATABASE_PATH and its parent-directory permissions.",
+            }
+            for check in checks:
+                check["title"] = titles.get(check["key"], check["title"])
+                check["message"] = messages.get((check["key"], check["status"]), check["message"])
+                if check["next_step"]:
+                    check["next_step"] = next_steps.get(check["key"], check["next_step"])
+
         required_missing = [
             check["key"]
             for check in checks

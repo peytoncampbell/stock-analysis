@@ -66,6 +66,8 @@ class StockService:
             return {
                 "stock_code": getattr(quote, "code", stock_code),
                 "stock_name": getattr(quote, "name", None),
+                "market": getattr(quote, "market", None),
+                "currency": getattr(quote, "currency", None),
                 "current_price": getattr(quote, "price", 0.0) or 0.0,
                 "change": getattr(quote, "change_amount", None),
                 "change_percent": getattr(quote, "change_pct", None),

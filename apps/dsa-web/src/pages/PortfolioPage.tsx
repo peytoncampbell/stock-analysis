@@ -57,6 +57,7 @@ const PIE_COLORS = ['#00d4ff', '#00ff88', '#ffaa00', '#ff7a45', '#7f8cff', '#ff4
 const DEFAULT_PAGE_SIZE = 20;
 const PORTFOLIO_SIGNAL_LOOKUP_CONCURRENCY = 6;
 const FALLBACK_BROKERS: PortfolioImportBrokerItem[] = [
+  { broker: 'wealthsimple', aliases: ['ws'], displayName: 'Wealthsimple' },
   { broker: 'huatai', aliases: [], displayName: '华泰' },
   { broker: 'citic', aliases: ['zhongxin'], displayName: '中信' },
   { broker: 'cmb', aliases: ['cmbchina', 'zhaoshang'], displayName: '招商' },
@@ -133,8 +134,8 @@ function formatPortfolioLimitation(limitation: string, language: PortfolioPageLa
   return PORTFOLIO_LIMITATION_LABELS[limitation]?.[language] ?? limitation;
 }
 
-const DECISION_SIGNAL_MARKETS = new Set<DecisionSignalMarket>(['cn', 'hk', 'us', 'jp', 'kr', 'tw']);
-type PortfolioAccountMarket = 'cn' | 'hk' | 'us' | 'jp' | 'kr' | 'tw';
+const DECISION_SIGNAL_MARKETS = new Set<DecisionSignalMarket>(['cn', 'hk', 'us', 'ca', 'jp', 'kr', 'tw']);
+type PortfolioAccountMarket = 'cn' | 'hk' | 'us' | 'ca' | 'jp' | 'kr' | 'tw';
 
 function toDecisionSignalMarket(value: string | null | undefined): DecisionSignalMarket | undefined {
   const normalized = String(value || '').toLowerCase();
@@ -1120,6 +1121,7 @@ const PortfolioPage: React.FC = () => {
               <option value="cn">市场：A 股（cn）</option>
               <option value="hk">市场：港股（hk）</option>
               <option value="us">市场：美股（us）</option>
+              <option value="ca">Market: Canada (ca)</option>
               <option value="jp">市场：日股（jp）</option>
               <option value="kr">市场：韩股（kr）</option>
               <option value="tw">市场：台股（tw）</option>

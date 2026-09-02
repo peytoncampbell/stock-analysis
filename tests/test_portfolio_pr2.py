@@ -198,8 +198,23 @@ class PortfolioPr2TestCase(unittest.TestCase):
         self.assertIn("huatai", broker_map)
         self.assertIn("citic", broker_map)
         self.assertIn("cmb", broker_map)
+        self.assertIn("wealthsimple", broker_map)
+        self.assertIn("ws", broker_map["wealthsimple"]["aliases"])
         self.assertIn("zhongxin", broker_map["citic"]["aliases"])
         self.assertIn("zhaoshang", broker_map["cmb"]["aliases"])
+
+    def test_import_wealthsimple_trade_csv(self) -> None:
+        csv_text = (
+            "Transaction Date,Symbol,Transaction Type,Quantity,Price,Currency,Transaction ID,Fees\n"
+            "2026-01-02,SHOP.TO,Buy,2,150.25,CAD,WS-001,0\n"
+        )
+        parsed = self.import_service.parse_trade_csv(
+            broker="wealthsimple",
+            content=csv_text.encode("utf-8"),
+        )
+        self.assertEqual(parsed["record_count"], 1)
+        self.assertEqual(parsed["records"][0]["symbol"], "SHOP.TO")
+        self.assertEqual(parsed["records"][0]["currency"], "CAD")
 
     def test_import_preserves_leading_zero_symbol(self) -> None:
         csv_text = (

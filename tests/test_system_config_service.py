@@ -1040,6 +1040,16 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         self.assertEqual(checks["stock_list"]["status"], "configured")
         self.assertEqual(checks["notification"]["status"], "optional")
 
+    def test_get_setup_status_uses_english_report_language(self) -> None:
+        self._rewrite_env("REPORT_LANGUAGE=en", "STOCK_LIST=600519")
+
+        with patch.dict(os.environ, {}, clear=True):
+            status = self.service.get_setup_status()
+
+        checks = {check["key"]: check for check in status["checks"]}
+        self.assertEqual(checks["llm_primary"]["title"], "LLM primary channel")
+        self.assertEqual(checks["stock_list"]["message"], "1 stock configured.")
+
     def test_generation_backend_status_preview_uses_draft_backend(self) -> None:
         self._rewrite_env(
             "GENERATION_BACKEND=litellm",

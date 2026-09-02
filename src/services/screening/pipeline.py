@@ -75,7 +75,7 @@ def screen(
 
     Args:
         strategy: Strategy name (matches a YAML file in strategies/).
-        market: Market scope, currently only "cn".
+        market: Market scope: cn, us, ca, or wealthsimple.
         max_output: Override max output count from strategy.
         use_llm: Whether to use LLM for L2 ranking.
         llm_context: Optional market/news/theme context supplied to the LLM ranker.
@@ -108,8 +108,10 @@ def screen(
     if config is None:
         config = Config.from_env()
 
-    if market not in ("cn", "us"):
-        raise ValueError(f"Unsupported market: {market!r} (supported: cn, us)")
+    if market not in ("cn", "us", "ca", "wealthsimple"):
+        raise ValueError(
+            f"Unsupported market: {market!r} (supported: cn, us, ca, wealthsimple)"
+        )
 
     run_id = uuid.uuid4().hex[:12]
     degradation: list[str] = []
@@ -587,6 +589,12 @@ def _df_to_picks(df: pd.DataFrame) -> list[Pick]:
             name=str(row.get("name", row.get("名称", row.get("股票名称", "")))),
             screen_score=float(row.get("screen_score", 0)),
             final_score=float(row.get("screen_score", 0)),
+            provider_symbol=_safe_text(row.get("provider_symbol", row.get("code", ""))),
+            exchange=_safe_text(row.get("exchange")),
+            currency=_safe_text(row.get("currency")),
+            asset_type=_safe_text(row.get("asset_type")) or "stock",
+            wealthsimple_status=_safe_text(row.get("wealthsimple_status")) or "unknown",
+            verified_at=_safe_text(row.get("verified_at")),
             price=float(row.get("price", row.get("最新价", 0)) or 0),
             change_pct=float(row.get("change_pct", row.get("涨跌幅", 0)) or 0),
             amount=float(row.get("amount", row.get("成交额", 0)) or 0),

@@ -81,8 +81,10 @@ def test_bundled_strategies_are_loaded_from_the_internal_package() -> None:
         "quality_value",
         "shrink_pullback",
         "volume_breakout",
+        "wealthsimple_core",
     }
     assert strategies["dual_low"].screening.factor_weights["value"] < 0.40
+    assert strategies["wealthsimple_core"].screening.market_scope == ["wealthsimple", "ca", "us"]
 
 
 def test_list_strategies_preserves_legacy_strategies_dir_override() -> None:

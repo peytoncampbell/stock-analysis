@@ -72,8 +72,8 @@ def fetch_snapshot_with_fallback(
     market: str = "cn",
 ) -> pd.DataFrame:
     """Try live sources, optionally falling back to the last-good snapshot."""
-    if market == "us":
-        return _fetch_us_snapshot_with_fallback(required_columns)
+    if market in {"us", "ca", "wealthsimple"}:
+        return _fetch_north_america_snapshot(required_columns, market=market)
 
     errors = []
     required = required_columns or []
@@ -135,16 +135,27 @@ def fetch_snapshot_with_fallback(
     raise RuntimeError(f"All snapshot sources failed: {'; '.join(errors)}")
 
 
-def _fetch_us_snapshot_with_fallback(
+def _fetch_north_america_snapshot(
     required_columns: list[str] | None = None,
+    *,
+    market: str,
 ) -> pd.DataFrame:
-    """Fetch US equity snapshot via yfinance adapter."""
-    from src.services.screening.snapshot_us import fetch_us_snapshot
+    """Fetch a US, Canadian, or combined Wealthsimple snapshot."""
+    from src.services.screening.snapshot_us import (
+        fetch_ca_snapshot,
+        fetch_us_snapshot,
+        fetch_wealthsimple_snapshot,
+    )
 
-    df = fetch_us_snapshot()
+    fetcher = {
+        "us": fetch_us_snapshot,
+        "ca": fetch_ca_snapshot,
+        "wealthsimple": fetch_wealthsimple_snapshot,
+    }[market]
+    df = fetcher()
     missing = _missing_required_columns(df, required_columns or [])
     if missing:
-        logger.warning("US snapshot missing columns: %s", ",".join(missing))
+        logger.warning("%s snapshot missing columns: %s", market, ",".join(missing))
     return df
 
 

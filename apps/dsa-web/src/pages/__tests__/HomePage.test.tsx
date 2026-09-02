@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { analysisApi, DuplicateTaskError } from '../../api/analysis';
 import { agentApi } from '../../api/agent';
 import { historyApi } from '../../api/history';
+import { screeningApi } from '../../api/screening';
 import { systemConfigApi } from '../../api/systemConfig';
 import { UiLanguageProvider } from '../../contexts/UiLanguageContext';
 import { useTaskStream } from '../../hooks/useTaskStream';
@@ -57,6 +58,13 @@ vi.mock('../../api/systemConfig', () => ({
     getWatchlist: vi.fn().mockResolvedValue([]),
     addToWatchlist: vi.fn().mockResolvedValue([]),
     removeFromWatchlist: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+vi.mock('../../api/screening', () => ({
+  screeningApi: {
+    getHistory: vi.fn(),
+    getRun: vi.fn(),
   },
 }));
 
@@ -245,6 +253,7 @@ describe('HomePage', () => {
       tasks: [],
     });
     vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue([]);
+    vi.mocked(screeningApi.getHistory).mockResolvedValue({ enabled: true, runs: [], runCount: 0 });
     vi.mocked(agentApi.getSkills).mockResolvedValue({ skills: [], default_skill_id: '' });
     vi.mocked(historyApi.getDiagnostics).mockResolvedValue({
       status: 'unknown',
@@ -300,6 +309,72 @@ describe('HomePage', () => {
     expect(historyApi.getMarkdown).not.toHaveBeenCalled();
   });
 
+  it('shows the latest Wealthsimple-ranked stocks as the main dashboard', async () => {
+    window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'en');
+    vi.mocked(historyApi.getList).mockResolvedValue({ total: 0, page: 1, limit: 20, items: [] });
+    vi.mocked(screeningApi.getHistory).mockResolvedValue({
+      enabled: true,
+      runCount: 1,
+      runs: [{
+        runId: 'run-1',
+        strategy: 'wealthsimple_core',
+        market: 'wealthsimple',
+        snapshotCount: 568,
+        afterFilterCount: 561,
+        candidateCount: 1,
+        createdAt: '2026-09-02T20:28:00Z',
+      }],
+    });
+    vi.mocked(screeningApi.getRun).mockResolvedValue({
+      enabled: true,
+      runId: 'run-1',
+      strategy: 'wealthsimple_core',
+      market: 'wealthsimple',
+      snapshotCount: 568,
+      afterFilterCount: 561,
+      candidateCount: 1,
+      createdAt: '2026-09-02T20:28:00Z',
+      result: {
+        enabled: true,
+        candidateCount: 1,
+        snapshotCount: 568,
+        afterFilterCount: 561,
+        llmRanked: false,
+        candidates: [{
+          rank: 1,
+          code: 'AAPL',
+          name: 'Apple',
+          exchange: 'NASDAQ',
+          currency: 'USD',
+          assetType: 'stock',
+          wealthsimpleStatus: 'likely',
+          score: 77.4,
+          price: 325.13,
+          changePct: 2.61,
+          reason: 'Factor ranked',
+          factorScores: { liquidity: 98.7, momentum: 65 },
+          raw: {},
+        }],
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <UiLanguageProvider>
+          <HomePage />
+        </UiLanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Top opportunities' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Analyze AAPL' })).toBeInTheDocument();
+    expect(screen.getByText('Liquidity 99 · Momentum 65')).toBeInTheDocument();
+    expect(screen.getByText('568')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open screener' }));
+    expect(navigateMock).toHaveBeenCalledWith('/screening');
+  });
+
   it('loads markdown only after opening the full report drawer', async () => {
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 1,
@@ -343,6 +418,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: '历史' }));
     expect(await screen.findByText('开始分析')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '开始分析', level: 3 })).toBeInTheDocument();
     expect(screen.getByText('输入股票代码进行分析，或从左侧选择历史报告查看。')).toBeInTheDocument();
@@ -453,6 +529,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: '历史' }));
     expect(await screen.findByRole('button', { name: /MARKET/ })).toBeInTheDocument();
     const newerStockButton = await screen.findByRole('button', { name: /AAPL/ });
     const marketButton = await screen.findByRole('button', { name: /MARKET/ });
@@ -2482,6 +2559,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: '历史' }));
     expect(await screen.findByRole('button', { name: /MARKET/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '删除 大盘复盘 历史记录' }));
@@ -3013,6 +3091,34 @@ describe('HomePage', () => {
     expect(navigateMock).toHaveBeenCalledWith('/settings');
   });
 
+  it('opens on the watchlist and does not block analysis when only the Agent channel is missing', async () => {
+    vi.mocked(historyApi.getList).mockResolvedValue({ total: 0, page: 1, limit: 20, items: [] });
+    vi.mocked(systemConfigApi.getWatchlist).mockResolvedValue(['600519']);
+    vi.mocked(systemConfigApi.getSetupStatus).mockResolvedValue({
+      isComplete: false,
+      readyForSmoke: true,
+      requiredMissingKeys: ['llm_agent'],
+      nextStepKey: 'llm_agent',
+      checks: [{
+        key: 'llm_agent',
+        title: 'Agent channel',
+        category: 'ai_model',
+        required: true,
+        status: 'needs_action',
+        message: 'Missing Agent channel',
+      }],
+    });
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId('watchlist-row-600519')).toBeInTheDocument();
+    expect(screen.queryByText('基础配置未完成')).not.toBeInTheDocument();
+  });
+
   it('navigates to chat with report context when asking a follow-up question', async () => {
     vi.mocked(historyApi.getList).mockResolvedValue({
       total: 1,
@@ -3113,6 +3219,7 @@ describe('HomePage', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(await screen.findByRole('button', { name: '历史' }));
     const historyTrendButton = await screen.findByRole('button', { name: '历史趋势' });
     fireEvent.click(historyTrendButton);
 
@@ -3413,6 +3520,7 @@ describe('HomePage', () => {
     );
 
     await screen.findByText('趋势维持强势');
+    fireEvent.click(await screen.findByRole('button', { name: '历史' }));
 
     fireEvent.click(screen.getByRole('button', { name: '大盘复盘' }));
 

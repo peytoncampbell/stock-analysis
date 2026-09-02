@@ -894,6 +894,7 @@ class ScreeningService:
             "strategy_count": engine_status.get("strategy_count"),
             "reference_project": engine_status.get("reference_project"),
             "reference_revision": engine_status.get("reference_revision"),
+            "supported_markets": engine_status.get("supported_markets", []),
         }
         source_health = _get_screening_source_health_snapshot()
         if source_health:
@@ -1564,6 +1565,7 @@ def _call_screening_status() -> Dict[str, Any]:
         "strategy_count": strategy_count,
         "reference_project": REFERENCE_PROJECT,
         "reference_revision": REFERENCE_REVISION,
+        "supported_markets": ["cn", "us", "ca", "wealthsimple"],
     }
 
 
@@ -3753,6 +3755,12 @@ def _normalize_candidate(raw: Any, rank: int) -> Dict[str, Any]:
         "rank": item.get("rank") or source.get("rank") or rank,
         "code": item.get("code") or source.get("code") or item.get("symbol") or source.get("symbol") or item.get("stock_code") or source.get("stock_code") or "",
         "name": item.get("name") or source.get("name") or item.get("stock_name") or source.get("stock_name") or "",
+        "provider_symbol": item.get("provider_symbol") or source.get("provider_symbol") or "",
+        "exchange": item.get("exchange") or source.get("exchange") or "",
+        "currency": item.get("currency") or source.get("currency") or "",
+        "asset_type": item.get("asset_type") or source.get("asset_type") or "stock",
+        "wealthsimple_status": item.get("wealthsimple_status") or source.get("wealthsimple_status") or "unknown",
+        "verified_at": item.get("verified_at") or source.get("verified_at") or "",
         "score": _first_present(item, source, "score", "final_score"),
         "screen_score": _first_present(item, source, "screen_score"),
         "reason": item.get("reason") or source.get("reason") or source.get("ranking_reason") or source.get("risk_summary") or item.get("summary") or _build_candidate_reason(source),

@@ -198,6 +198,12 @@ class Pick:
     deep_analysis_operation_advice: str = ""
     deep_analysis_trend_prediction: str = ""
     deep_analysis_risk_flags: list[str] = field(default_factory=list)
+    provider_symbol: str = ""
+    exchange: str = ""
+    currency: str = ""
+    asset_type: str = "stock"
+    wealthsimple_status: str = "unknown"
+    verified_at: str = ""
 
 
 @dataclass

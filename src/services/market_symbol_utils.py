@@ -9,6 +9,7 @@ without introducing import cycles.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Optional
 
 
@@ -36,6 +37,9 @@ _SUFFIX_TO_SPEC = {
     for suffix in spec.suffixes
 }
 
+_CANADIAN_SUFFIXES = ("TO", "V", "CN", "NE")
+_CANADIAN_BASE_RE = re.compile(r"^[A-Z0-9][A-Z0-9-]{0,14}$")
+
 
 def split_suffix_symbol(stock_code: str) -> tuple[str, str] | None:
     """Return ``(base, suffix)`` for dotted symbols, upper-cased and stripped."""
@@ -50,12 +54,14 @@ def split_suffix_symbol(stock_code: str) -> tuple[str, str] | None:
 
 
 def get_suffix_market(stock_code: str) -> Optional[str]:
-    """Return jp/kr/tw for supported suffix-only Yahoo symbols, else None."""
+    """Return the market for a supported Yahoo suffix symbol, else None."""
 
     parts = split_suffix_symbol(stock_code)
     if parts is None:
         return None
     base, suffix = parts
+    if suffix in _CANADIAN_SUFFIXES and _CANADIAN_BASE_RE.fullmatch(base):
+        return "ca"
     spec = _SUFFIX_TO_SPEC.get(suffix)
     if spec is None:
         return None
@@ -85,6 +91,10 @@ def is_tw_suffix_symbol(stock_code: str) -> bool:
     return is_suffix_market_symbol(stock_code, "tw")
 
 
+def is_ca_suffix_symbol(stock_code: str) -> bool:
+    return is_suffix_market_symbol(stock_code, "ca")
+
+
 def normalize_suffix_market_symbol(stock_code: str) -> Optional[str]:
     """Normalize supported suffix-only symbols to upper-case Yahoo form."""
 
@@ -109,5 +119,7 @@ def suffix_base_lookup_allowed(canonical_code: str) -> bool:
 
 
 def market_suffixes(market: str) -> tuple[str, ...]:
+    if (market or "").strip().lower() == "ca":
+        return _CANADIAN_SUFFIXES
     spec = _MARKET_TO_SPEC.get((market or "").strip().lower())
     return spec.suffixes if spec else ()

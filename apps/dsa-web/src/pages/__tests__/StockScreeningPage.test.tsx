@@ -986,7 +986,9 @@ describe('StockScreeningPage', () => {
     expect(await screen.findByText('选股已开启')).toBeInTheDocument();
 
     const marketSelect = screen.getByLabelText('市场') as HTMLSelectElement;
-    expect(Array.from(marketSelect.options).map((option) => option.value)).toEqual(['cn']);
+    expect(Array.from(marketSelect.options).map((option) => option.value)).toEqual([
+      'wealthsimple', 'ca', 'us', 'cn',
+    ]);
 
     const strategySelect = screen.getByLabelText('策略') as HTMLSelectElement;
     expect(Array.from(strategySelect.options).map((option) => option.textContent)).toEqual([

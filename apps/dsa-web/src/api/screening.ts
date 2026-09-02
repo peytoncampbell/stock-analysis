@@ -18,6 +18,7 @@ export type ScreeningStatus = {
   strategyCount?: number | null;
   referenceProject?: string | null;
   referenceRevision?: string | null;
+  supportedMarkets?: string[];
   sourceHealth?: Record<string, Record<string, Record<string, unknown>>>;
   diagnostics?: Record<string, string>;
 };
@@ -26,6 +27,12 @@ export type ScreeningCandidate = {
   rank: number;
   code: string;
   name: string;
+  providerSymbol?: string;
+  exchange?: string;
+  currency?: string;
+  assetType?: 'stock' | 'etf' | string;
+  wealthsimpleStatus?: 'confirmed' | 'likely' | 'unknown' | string;
+  verifiedAt?: string;
   score?: number | null;
   screenScore?: number | null;
   reason: string;

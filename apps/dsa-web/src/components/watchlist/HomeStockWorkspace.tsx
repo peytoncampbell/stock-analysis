@@ -30,6 +30,12 @@ export type WatchlistAnalyzeMode = 'all' | 'pending';
 
 export interface HomeWatchlistRow {
   code: string;
+  name?: string;
+  exchange?: string;
+  currency?: string;
+  currentPrice?: number;
+  changePercent?: number;
+  quoteStatus?: 'loading' | 'available' | 'unavailable';
   assetType?: AssetAwareAssetType;
   /**
    * Asset-aware identity key already resolved by HomePage from the stock index
@@ -147,7 +153,7 @@ const WatchlistRowItem: React.FC<{
   const isLatestDetailLoading = Boolean(row.isTodayStatusLoading);
   const isLatestDetailUnavailable = !isLatestDetailLoading && Boolean(row.isTodayStatusUnknown);
   const item = isLatestDetailLoading || isLatestDetailUnavailable ? undefined : row.latestItem;
-  const stockName = row.latestItem?.stockName || row.code;
+  const stockName = row.name || row.latestItem?.stockName || row.code;
   const canOpenDetail = typeof item?.id === 'number';
 
   const handleOpenDetail = () => {
@@ -193,6 +199,21 @@ const WatchlistRowItem: React.FC<{
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <span className="font-mono text-[11px] text-secondary-text">{row.code}</span>
+            {row.exchange || row.currency ? (
+              <>
+                <span className="h-1 w-1 rounded-full bg-subtle-hover" />
+                <span className="text-[11px] text-muted-text">{[row.exchange, row.currency].filter(Boolean).join(' · ')}</span>
+              </>
+            ) : null}
+            {row.quoteStatus === 'available' && row.currentPrice != null ? (
+              <>
+                <span className="h-1 w-1 rounded-full bg-subtle-hover" />
+                <span className="text-[11px] font-medium text-foreground">
+                  {row.currency ? `${row.currency} ` : ''}{row.currentPrice.toFixed(2)}
+                  {row.changePercent != null ? ` · ${row.changePercent >= 0 ? '+' : ''}${row.changePercent.toFixed(2)}%` : ''}
+                </span>
+              </>
+            ) : null}
             {item?.lastAnalysisTime ? (
               <>
                 <span className="h-1 w-1 rounded-full bg-subtle-hover" />

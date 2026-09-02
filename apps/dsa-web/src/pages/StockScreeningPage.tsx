@@ -39,9 +39,16 @@ import {
   type ScreeningStrategy,
 } from '../api/screening';
 import { formatParsedApiError, getParsedApiError, toApiErrorMessage, type ParsedApiError } from '../api/error';
+import { systemConfigApi } from '../api/systemConfig';
 import { AppPage, Button, InlineAlert, Select } from '../components/common';
+import { useUiLanguage } from '../contexts/UiLanguageContext';
 
-const MARKETS = [{ id: 'cn', label: 'A 股' }];
+const MARKETS = [
+  { id: 'wealthsimple', label: 'Wealthsimple 加美股', enLabel: 'Wealthsimple CA + US' },
+  { id: 'ca', label: '加拿大', enLabel: 'Canada' },
+  { id: 'us', label: '美股', enLabel: 'United States' },
+  { id: 'cn', label: 'A 股', enLabel: 'China A-shares' },
+];
 const SCREEN_TASK_STORAGE_KEY = 'dsa.screening.activeScreenTask.v1';
 const SCREEN_TASK_POLL_INTERVAL_MS = 2000;
 const CUSTOM_STRATEGY_OPTION_VALUE = '__custom_strategy__';
@@ -55,12 +62,31 @@ const STRATEGY_CATEGORY_LABELS: Record<string, string> = {
   value: '价值',
 };
 
-const formatStrategyCategory = (value?: string) => {
+const STRATEGY_CATEGORY_LABELS_EN: Record<string, string> = {
+  framework: 'Core', income: 'Income', momentum: 'Momentum', quality: 'Quality',
+  reversal: 'Reversal', trend: 'Trend', value: 'Value',
+};
+
+const STRATEGY_NAMES_EN: Record<string, string> = {
+  balanced_alpha: 'Balanced multi-factor',
+  blue_chip_income: 'Blue-chip income',
+  capital_heat: 'Capital activity',
+  dual_low: 'Low price and valuation',
+  low_volatility_quality: 'Low-volatility quality',
+  momentum_quality: 'Momentum quality',
+  oversold_reversal: 'Oversold reversal',
+  quality_value: 'Quality value',
+  shrink_pullback: 'Low-volume pullback',
+  volume_breakout: 'Volume breakout',
+  wealthsimple_core: 'Wealthsimple Core',
+};
+
+const formatStrategyCategory = (value?: string, english = false) => {
   const normalized = value?.trim();
   if (!normalized) {
-    return '自定义';
+    return english ? 'Custom' : '自定义';
   }
-  return STRATEGY_CATEGORY_LABELS[normalized.toLowerCase()] || normalized;
+  return (english ? STRATEGY_CATEGORY_LABELS_EN : STRATEGY_CATEGORY_LABELS)[normalized.toLowerCase()] || normalized;
 };
 
 type PersistedScreenTask = {
@@ -71,15 +97,15 @@ type PersistedScreenTask = {
   maxResults: number;
 };
 
-const formatRunCreatedAt = (value: string | null | undefined) => {
+const formatRunCreatedAt = (value: string | null | undefined, english = false) => {
   if (!value) {
-    return '时间未知';
+    return english ? 'Unknown time' : '时间未知';
   }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  return parsed.toLocaleString('zh-CN', {
+  return parsed.toLocaleString(english ? 'en-CA' : 'zh-CN', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -89,14 +115,19 @@ const formatRunCreatedAt = (value: string | null | undefined) => {
 };
 
 // 历史条目里展示筛选条件：策略 ID → 中文名（找不到时回退到原始 ID）
-const formatHistoryStrategyName = (strategyId: string, strategies: ScreeningStrategy[]): string => {
+const formatHistoryStrategyName = (strategyId: string, strategies: ScreeningStrategy[], english = false): string => {
+  if (english) {
+    return STRATEGY_NAMES_EN[strategyId] || strategyId || 'Unknown strategy';
+  }
   const matched = strategies.find((item) => item.id === strategyId);
   return matched?.name || matched?.title || strategyId || '未知策略';
 };
 
 // 历史条目里展示筛选条件：市场 ID → 中文标签
-const formatHistoryMarketLabel = (marketId: string | null | undefined): string =>
-  MARKETS.find((item) => item.id === marketId)?.label || marketId || 'cn';
+const formatHistoryMarketLabel = (marketId: string | null | undefined, english = false): string => {
+  const item = MARKETS.find((candidate) => candidate.id === marketId);
+  return (english ? item?.enLabel : item?.label) || marketId || 'cn';
+};
 
 const readPersistedScreenTask = (): PersistedScreenTask | null => {
   if (typeof window === 'undefined') {
@@ -167,16 +198,16 @@ const formatNumber = (value: unknown, digits = 2) => {
   return Number(value).toFixed(digits);
 };
 
-const formatAmount = (value: unknown) => {
+const formatAmount = (value: unknown, english = false) => {
   if (value == null || value === '' || Number.isNaN(Number(value))) {
     return '-';
   }
   const amount = Number(value);
   if (Math.abs(amount) >= 100_000_000) {
-    return `${(amount / 100_000_000).toFixed(2)} 亿`;
+    return english ? `${(amount / 1_000_000).toFixed(2)}M` : `${(amount / 100_000_000).toFixed(2)} 亿`;
   }
   if (Math.abs(amount) >= 10_000) {
-    return `${(amount / 10_000).toFixed(2)} 万`;
+    return english ? `${(amount / 1_000).toFixed(2)}K` : `${(amount / 10_000).toFixed(2)} 万`;
   }
   return amount.toFixed(2);
 };
@@ -264,26 +295,28 @@ const getHotspotQualityLabel = (value: unknown) => {
   return HOTSPOT_QUALITY_LABELS[text.toLowerCase()] || '待确认';
 };
 
-const getLocalFactorReason = (item: ScreeningCandidate) => {
+const getLocalFactorReason = (item: ScreeningCandidate, english = false) => {
   const factors = Object.entries(item.factorScores || {})
     .filter(([, value]) => typeof value === 'number')
     .sort((a, b) => Number(b[1]) - Number(a[1]))
     .slice(0, 3)
-    .map(([key, value]) => `${FACTOR_LABELS[key] || key} ${Number(value).toFixed(0)}`);
+    .map(([key, value]) => `${(english ? FACTOR_LABELS_EN : FACTOR_LABELS)[key] || key} ${Number(value).toFixed(0)}`);
   const tags = (item.postAnalysisTags || [])
     .slice(0, 2)
     .map((tag) => POST_TAG_LABELS[tag] || tag);
   if (factors.length > 0) {
-    return `主要优势：${factors.join('、')}${tags.length > 0 ? `；标签：${tags.join('、')}` : ''}`;
+    return english
+      ? `Main strengths: ${factors.join(', ')}${tags.length > 0 ? `; tags: ${tags.join(', ')}` : ''}`
+      : `主要优势：${factors.join('、')}${tags.length > 0 ? `；标签：${tags.join('、')}` : ''}`;
   }
   return '';
 };
 
-const getCandidateReason = (item: ScreeningCandidate) => {
+const getCandidateReason = (item: ScreeningCandidate, english = false) => {
   if (item.llmThesis || item.llmScore != null) {
-    return item.reason || item.llmThesis || 'LLM 已完成相对排序。';
+    return item.reason || item.llmThesis || (english ? 'The model completed relative ranking.' : 'LLM 已完成相对排序。');
   }
-  const localReason = getLocalFactorReason(item);
+  const localReason = getLocalFactorReason(item, english);
   if (localReason) {
     return localReason;
   }
@@ -295,12 +328,12 @@ const getCandidateReason = (item: ScreeningCandidate) => {
   if (typeof summary === 'string') {
     return summary;
   }
-  return '暂无摘要，请查看因子和风险信息。';
+  return english ? 'No summary is available; review the factors and risks.' : '暂无摘要，请查看因子和风险信息。';
 };
 
-const getSignal = (item: ScreeningCandidate) => {
+const getSignal = (item: ScreeningCandidate, english = false) => {
   const rawSignal = item.raw.action ?? item.raw.signal ?? item.raw.recommendation;
-  return typeof rawSignal === 'string' && rawSignal.trim() ? rawSignal : '观察';
+  return typeof rawSignal === 'string' && rawSignal.trim() ? rawSignal : (english ? 'Watch' : '观察');
 };
 
 const getFactorEntries = (item: ScreeningCandidate) =>
@@ -375,11 +408,20 @@ const normalizeScreenMessageKey = (value: string) => {
   return formatted ? formatted.trim().toLowerCase() : value.trim().toLowerCase();
 };
 
-const formatEnrichmentSummary = (value: string) =>
-  value
+const formatEnrichmentSummary = (value: string, english = false) => {
+  if (english) {
+    return value
+      .replace(/DSA行情\s*[:：]\s*/gi, 'Quote: ')
+      .replace(/DSA新闻\s*[:：]\s*/gi, 'News: ')
+      .replace(/DSA事件\s*[:：]\s*/gi, 'Events: ')
+      .replace(/现价/g, 'price')
+      .replace(/涨跌幅/g, 'change');
+  }
+  return value
     .replace(/DSA行情\s*[:：]\s*/gi, '行情：')
     .replace(/DSA新闻\s*[:：]\s*/gi, '新闻：')
     .replace(/DSA事件\s*[:：]\s*/gi, '事件：');
+};
 
 const formatScreenMessage = (value: string) => {
   if (/^DSA provider context applied \d+ of \d+ candidates/i.test(value)) {
@@ -529,6 +571,32 @@ const getRiskLabel = (riskLevel: string | undefined) => {
   if (riskLevel === 'low') return '低';
   return '待评估';
 };
+
+const FACTOR_LABELS_EN: Record<string, string> = {
+  value: 'Value',
+  liquidity: 'Liquidity',
+  momentum: 'Momentum',
+  reversal: 'Reversal',
+  activity: 'Activity',
+  stability: 'Stability',
+  size: 'Size',
+  theme_heat: 'Theme heat',
+  topic_alignment: 'Theme fit',
+};
+
+const getWealthsimpleLabel = (value?: string) => {
+  if (value === 'confirmed') return 'Confirmed';
+  if (value === 'likely') return 'Likely';
+  return 'Unknown';
+};
+
+const getWealthsimpleClassName = (value?: string) => (
+  value === 'confirmed'
+    ? 'bg-success/10 text-success'
+    : value === 'likely'
+      ? 'bg-cyan/10 text-cyan'
+      : 'bg-warning/10 text-warning'
+);
 
 const getRouteTimeLabel = (item: ScreeningHotspotDetail['route'][number]) => {
   const rawTime = item.publishedAt || item.date || item.time || '';
@@ -833,13 +901,17 @@ const MiniSparkline: React.FC<{ score?: number | null; selected?: boolean }> = (
 
 const StockScreeningPage: React.FC = () => {
   const navigate = useNavigate();
+  const { language } = useUiLanguage();
+  const english = language === 'en';
   const [restoredTask] = useState<PersistedScreenTask | null>(() => readPersistedScreenTask());
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState(false);
-  const [market, setMarket] = useState(restoredTask?.market || 'cn');
-  const [strategy, setStrategy] = useState(restoredTask?.strategy || 'dual_low');
+  const [market, setMarket] = useState(restoredTask?.market || (english ? 'wealthsimple' : 'cn'));
+  const [strategy, setStrategy] = useState(restoredTask?.strategy || (english ? 'wealthsimple_core' : 'dual_low'));
   const [strategies, setStrategies] = useState<ScreeningStrategy[]>([]);
-  const [maxResults, setMaxResults] = useState(restoredTask?.maxResults || 3);
+  const [maxResults, setMaxResults] = useState(restoredTask?.maxResults || (english ? 10 : 3));
+  const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set());
+  const [watchlistMessage, setWatchlistMessage] = useState('');
   const [candidates, setCandidates] = useState<ScreeningCandidate[]>([]);
   const [hotspots, setHotspots] = useState<ScreeningHotspot[]>([]);
   const [hotspotsUpdatedAt, setHotspotsUpdatedAt] = useState<string | null>(null);
@@ -874,12 +946,22 @@ const StockScreeningPage: React.FC = () => {
   const [taskProgress, setTaskProgress] = useState(restoredTask?.taskId ? 10 : 0);
   const [taskMessage, setTaskMessage] = useState(restoredTask?.taskId ? '正在恢复选股任务状态...' : '');
 
-  const selectedStrategy = useMemo(() => strategies.find((item) => item.id === strategy), [strategies, strategy]);
-  const selectedStrategyTitle = selectedStrategy?.name || selectedStrategy?.title || '自定义策略';
+  const availableStrategies = useMemo(
+    () => strategies.filter((item) => !item.marketScope?.length || item.marketScope.includes(market)),
+    [market, strategies],
+  );
+  const selectedStrategy = useMemo(
+    () => availableStrategies.find((item) => item.id === strategy),
+    [availableStrategies, strategy],
+  );
+  const selectedStrategyTitle = selectedStrategy
+    ? formatHistoryStrategyName(selectedStrategy.id, strategies, english)
+    : (english ? 'Custom strategy' : '自定义策略');
   const selectedStrategyTag = formatStrategyCategory(
     selectedStrategy?.category || selectedStrategy?.tag || selectedStrategy?.tags?.[0],
+    english,
   );
-  const displayedStrategy = selectedStrategy ? selectedStrategyTitle : `自定义策略 (${strategy})`;
+  const displayedStrategy = selectedStrategy ? selectedStrategyTitle : `${english ? 'Custom strategy' : '自定义策略'} (${strategy})`;
   const screenMessages = useMemo(() => getScreenMessages(screenMeta), [screenMeta]);
   const selectedHotspot = useMemo(
     () => hotspots.find((item) => item.topic === selectedHotspotTopic),
@@ -887,13 +969,21 @@ const StockScreeningPage: React.FC = () => {
   );
   const factorRanking = Boolean(screenMeta && (screenMeta.rankingMode === 'factor' || screenMeta.llmRanked === false));
   const llmFailed = Boolean(factorRanking && screenMeta?.llmFailureReason);
-  const alertMessages = llmFailed
-    ? screenMessages.length > 0
-      ? screenMessages
-      : ['智能重排未完成，当前候选继续使用确定性因子评分。']
-    : screenMessages;
+  const alertMessages = english
+    ? llmFailed
+      ? ['Model ranking was unavailable; results use factor scores.']
+      : screenMessages.length > 0
+        ? ['Some optional data was unavailable; results use the available market data.']
+        : []
+    : llmFailed
+      ? screenMessages.length > 0
+        ? screenMessages
+        : ['智能重排未完成，当前候选继续使用确定性因子评分。']
+      : screenMessages;
   const isScreeningEnabled = enabled && available;
-  const statusText = isScreeningEnabled ? '选股已开启' : '选股未开启';
+  const statusText = isScreeningEnabled
+    ? (english ? 'Screening ready' : '选股已开启')
+    : (english ? 'Screening unavailable' : '选股未开启');
 
   const applyScreenResult = useCallback((result: ScreeningScreenResponse) => {
     const nextCandidates = result.candidates || [];
@@ -1052,9 +1142,14 @@ const StockScreeningPage: React.FC = () => {
       // 历史 run 的自定义/下线策略不在当前列表属预期行为，不做“回退第一项”的归一化，
       // 否则迟到的策略列表会把刚恢复好的上下文改写回默认策略。
       if (loadedStrategies.length > 0 && !historyContextStrategyRef.current) {
-        setStrategy((currentStrategy) =>
-          loadedStrategies.some((item) => item.id === currentStrategy) ? currentStrategy : loadedStrategies[0].id,
+        const marketStrategies = loadedStrategies.filter(
+          (item) => !item.marketScope?.length || item.marketScope.includes(market),
         );
+        setStrategy((currentStrategy) => (
+          marketStrategies.some((item) => item.id === currentStrategy)
+            ? currentStrategy
+            : marketStrategies[0]?.id || currentStrategy
+        ));
       }
     } catch (err) {
       setStrategies([]);
@@ -1062,7 +1157,7 @@ const StockScreeningPage: React.FC = () => {
     } finally {
       setLoadingStrategies(false);
     }
-  }, []);
+  }, [market]);
 
   const loadHotspots = useCallback(async (refresh = false) => {
     setLoadingHotspots(true);
@@ -1191,7 +1286,6 @@ const StockScreeningPage: React.FC = () => {
         setAvailable(status.available);
         if (status.enabled && status.available) {
           void loadStrategies();
-          void loadHotspots(false);
           void loadHistory();
         }
       })
@@ -1205,6 +1299,12 @@ const StockScreeningPage: React.FC = () => {
       active = false;
     };
   }, [loadHotspots, loadStrategies]);
+
+  useEffect(() => {
+    if (market === 'cn' && isScreeningEnabled) {
+      void loadHotspots(false);
+    }
+  }, [isScreeningEnabled, loadHotspots, market]);
 
   // 刷新后优先从 history API 按 run_id 恢复结果；恢复失败再回退到 task 轮询
   useEffect(() => {
@@ -1400,7 +1500,26 @@ const StockScreeningPage: React.FC = () => {
       clearScreeningResults();
     }
     setMarket(nextMarket);
+    const nextStrategy = strategies.find(
+      (item) => !item.marketScope?.length || item.marketScope.includes(nextMarket),
+    );
+    if (nextStrategy) {
+      setStrategy(nextStrategy.id);
+    }
   };
+
+  const handleAddCandidateToWatchlist = useCallback(async (candidate: ScreeningCandidate) => {
+    const code = String(candidate.code || '').trim();
+    if (!code) return;
+    setWatchlistMessage('');
+    try {
+      const codes = await systemConfigApi.addToWatchlist(code);
+      setWatchlistCodes(new Set(codes.map((item) => item.toUpperCase())));
+      setWatchlistMessage(`${code} added to your watchlist.`);
+    } catch (err) {
+      setWatchlistMessage(toApiErrorMessage(err, `Could not add ${code} to the watchlist.`));
+    }
+  }, []);
 
   const handleMaxResultsChange = (nextMaxResults: number) => {
     if (nextMaxResults !== maxResults) {
@@ -1419,7 +1538,7 @@ const StockScreeningPage: React.FC = () => {
     setError('');
     setScreenMeta(null);
     setTaskProgress(0);
-    setTaskMessage('正在提交选股任务...');
+    setTaskMessage(english ? 'Submitting screening task...' : '正在提交选股任务...');
     try {
       const task = await screeningApi.startScreen({ market, strategy, maxResults });
       persistScreenTask({
@@ -1430,11 +1549,11 @@ const StockScreeningPage: React.FC = () => {
       });
       setActiveTaskId(task.taskId);
       setTaskProgress(0);
-      setTaskMessage(task.message || '选股任务已提交');
+      setTaskMessage(task.message || (english ? 'Screening task submitted' : '选股任务已提交'));
     } catch (err) {
       setCandidates([]);
       setLoading(false);
-      setError(toApiErrorMessage(err, '选股任务提交失败，请稍后重试。'));
+      setError(toApiErrorMessage(err, english ? 'Could not submit the screening task.' : '选股任务提交失败，请稍后重试。'));
     }
   };
 
@@ -1445,7 +1564,7 @@ const StockScreeningPage: React.FC = () => {
           <span className="grid h-7 w-7 place-items-center rounded-full border-2 border-cyan text-cyan shadow-[0_0_24px_hsl(var(--primary)/0.18)]">
             <PlusCircle className="h-4 w-4" />
           </span>
-          <h1 className="text-2xl font-bold tracking-normal text-foreground">选股</h1>
+          <h1 className="text-2xl font-bold tracking-normal text-foreground">{english ? 'Stock screening' : '选股'}</h1>
         </div>
 
         <div className="inline-flex w-fit items-center gap-2 rounded-2xl border border-border/70 bg-card/80 px-4 py-2 text-sm shadow-soft-card">
@@ -1457,11 +1576,11 @@ const StockScreeningPage: React.FC = () => {
       {!enabled ? (
         <InlineAlert
           variant="info"
-          title="选股未开启"
-          message="开启后即可运行选股策略。"
+          title={english ? 'Screening is off' : '选股未开启'}
+          message={english ? 'Enable it to run a screening strategy.' : '开启后即可运行选股策略。'}
           action={
-            <Button size="sm" isLoading={enabling} loadingText="开启中..." onClick={() => void handleEnable()}>
-              开启选股
+            <Button size="sm" isLoading={enabling} loadingText={english ? 'Enabling...' : '开启中...'} onClick={() => void handleEnable()}>
+              {english ? 'Enable screening' : '开启选股'}
             </Button>
           }
         />
@@ -1470,14 +1589,14 @@ const StockScreeningPage: React.FC = () => {
       {enabled && !available ? (
         <InlineAlert
           variant="warning"
-          title="选股功能不可用"
-          message="请检查后端日志、策略文件和基础数据依赖后重启服务。"
+          title={english ? 'Screening is unavailable' : '选股功能不可用'}
+          message={english ? 'Check the backend logs, strategy files, and data dependencies, then restart the service.' : '请检查后端日志、策略文件和基础数据依赖后重启服务。'}
         />
       ) : null}
 
-      {error ? <InlineAlert variant="danger" title="调用失败" message={error} /> : null}
+      {error ? <InlineAlert variant="danger" title={english ? 'Request failed' : '调用失败'} message={error} /> : null}
 
-      <section className="rounded-2xl border border-border/80 bg-card/95 p-4 shadow-soft-card">
+      {market === 'cn' ? <section className="rounded-2xl border border-border/80 bg-card/95 p-4 shadow-soft-card">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-orange-500/10 text-orange-500 shadow-[0_10px_30px_rgba(249,115,22,0.16)]">
@@ -1723,13 +1842,13 @@ const StockScreeningPage: React.FC = () => {
             ) : null}
           </div>
         ) : null}
-      </section>
+      </section> : null}
 
       <section className="rounded-2xl border border-cyan/35 bg-card/95 p-4 shadow-soft-card">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <SlidersHorizontal className="h-4 w-4 text-cyan" />
-            运行选股
+            {english ? 'Run screening' : '运行选股'}
           </div>
           <span className="rounded-full border border-cyan/30 bg-cyan/10 px-3 py-1 text-xs font-semibold text-cyan">
             {selectedStrategyTag}
@@ -1738,7 +1857,7 @@ const StockScreeningPage: React.FC = () => {
 
         <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr_180px_auto] lg:items-end">
           <label className="space-y-2 text-xs font-medium text-secondary-text">
-            市场
+            {english ? 'Market' : '市场'}
             <select
               className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition-colors focus:border-cyan"
               value={market}
@@ -1747,25 +1866,25 @@ const StockScreeningPage: React.FC = () => {
             >
               {MARKETS.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.label}
+                  {english ? item.enLabel : item.label}
                 </option>
               ))}
             </select>
           </label>
 
           <div className="space-y-2 text-xs font-medium text-secondary-text">
-            <label htmlFor="screening-strategy">策略</label>
+            <label htmlFor="screening-strategy">{english ? 'Strategy' : '策略'}</label>
             <Select
               id="screening-strategy"
               value={selectedStrategy ? strategy : CUSTOM_STRATEGY_OPTION_VALUE}
               disabled={loading || loadingStrategies}
               placeholder=""
               options={[
-                ...strategies.map((item) => ({
+                ...availableStrategies.map((item) => ({
                   value: item.id,
-                  label: item.name || item.title || item.id,
+                  label: formatHistoryStrategyName(item.id, strategies, english),
                 })),
-                { value: CUSTOM_STRATEGY_OPTION_VALUE, label: '自定义策略…' },
+                { value: CUSTOM_STRATEGY_OPTION_VALUE, label: english ? 'Custom strategy…' : '自定义策略…' },
               ]}
               onChange={(value) =>
                 handleStrategyChange(
@@ -1777,20 +1896,20 @@ const StockScreeningPage: React.FC = () => {
 
           {!selectedStrategy && !loadingStrategies ? (
             <label className="space-y-2 text-xs font-medium text-secondary-text lg:col-start-2">
-              自定义策略 ID
+              {english ? 'Custom strategy ID' : '自定义策略 ID'}
               <input
-                aria-label="自定义策略 ID"
+                aria-label={english ? 'Custom strategy ID' : '自定义策略 ID'}
                 className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition-colors focus:border-cyan"
                 value={strategy}
                 disabled={loading}
-                placeholder="输入策略 ID"
+                placeholder={english ? 'Enter strategy ID' : '输入策略 ID'}
                 onChange={(event) => handleStrategyChange(event.target.value)}
               />
             </label>
           ) : null}
 
           <label className="space-y-2 text-xs font-medium text-secondary-text">
-            返回数量
+            {english ? 'Results' : '返回数量'}
             <input
               className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition-colors focus:border-cyan"
               type="number"
@@ -1805,19 +1924,19 @@ const StockScreeningPage: React.FC = () => {
           <Button
             className="h-11 min-w-40"
             isLoading={loading}
-            loadingText="筛选中..."
+            loadingText={english ? 'Screening...' : '筛选中...'}
             disabled={!isScreeningEnabled || loading || !strategy.trim()}
             onClick={() => void handleSubmit()}
           >
             <Play className="h-4 w-4" />
-            运行选股
+            {english ? 'Run screening' : '运行选股'}
           </Button>
         </div>
 
         <div className="mt-3 rounded-xl border border-border/75 bg-surface/55 px-3 py-2 text-xs leading-5 text-secondary-text">
           {strategyLoadError
             ? strategyLoadError
-            : selectedStrategy?.description || '策略会先执行硬过滤和因子评分，再进行风险与组合约束。'}
+            : selectedStrategy?.description || (english ? 'The strategy applies hard filters and factor scoring, then risk and portfolio constraints.' : '策略会先执行硬过滤和因子评分，再进行风险与组合约束。')}
         </div>
       </section>
 
@@ -1829,39 +1948,40 @@ const StockScreeningPage: React.FC = () => {
                 {loading ? <CircleAlert className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
               </span>
               <div>
-                <h2 className="text-sm font-semibold text-foreground">{loading ? '选股运行中' : '选股完成'}</h2>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {loading ? (english ? 'Screening in progress' : '选股运行中') : (english ? 'Screening complete' : '选股完成')}
+                </h2>
                 <p className="mt-1 text-xs text-secondary-text">
                   {loading
-                    ? `${taskMessage || '正在执行选股'} · ${taskProgress}%`
-                    : `${displayedStrategy} · ${MARKETS.find((item) => item.id === market)?.label}`}
+                    ? `${english ? 'Running screening' : taskMessage || '正在执行选股'} · ${taskProgress}%`
+                    : `${displayedStrategy} · ${english ? MARKETS.find((item) => item.id === market)?.enLabel : MARKETS.find((item) => item.id === market)?.label}`}
                 </p>
               </div>
             </div>
           </div>
 
           <details className="mt-3 border-t border-border/70 pt-3 text-xs text-secondary-text">
-            <summary className="w-fit cursor-pointer font-medium text-secondary-text">运行详情</summary>
+            <summary className="w-fit cursor-pointer font-medium text-secondary-text">{english ? 'Run details' : '运行详情'}</summary>
             <div className="mt-2 grid gap-1">
-              <span>任务：{activeTaskId ? activeTaskId.slice(0, 12) : '-'}</span>
-              <span>Run ID：{screenMeta?.runId || '-'}</span>
+              <span>{english ? 'Task' : '任务'}: {activeTaskId ? activeTaskId.slice(0, 12) : '-'}</span>
+              <span>{english ? 'Run ID: ' : 'Run ID：'}{screenMeta?.runId || '-'}</span>
               <span>
-                快照 {screenMeta?.snapshotCount ?? '-'} · 过滤后 {screenMeta?.afterFilterCount ?? '-'} · 候选 {screenMeta?.candidateCount ?? candidates.length}
+                {english ? 'Snapshot' : '快照'} {screenMeta?.snapshotCount ?? '-'} · {english ? 'After filters' : '过滤后'} {screenMeta?.afterFilterCount ?? '-'} · {english ? 'Candidates' : '候选'} {screenMeta?.candidateCount ?? candidates.length}
               </span>
               <span>
-                排序：{screenMeta?.llmRanked ? '智能重排' : screenMeta ? '确定性因子' : '-'}
+                {english ? 'Ranking: ' : '排序：'}{screenMeta?.llmRanked ? (english ? 'Model ranking' : '智能重排') : screenMeta ? (english ? 'Factor score' : '确定性因子') : '-'}
                 {screenMeta?.llmModelUsed ? ` · ${screenMeta.llmModelUsed}` : ''}
-                {screenMeta?.llmCoverage != null ? ` · 覆盖 ${formatPercent(screenMeta.llmCoverage)}` : ''}
+                {screenMeta?.llmCoverage != null ? ` · ${english ? 'Coverage' : '覆盖'} ${formatPercent(screenMeta.llmCoverage)}` : ''}
               </span>
               {screenMeta?.resultVariantPoolSize ? (
                 <span>
-                  候选差异：近分池 {screenMeta.resultVariantPoolSize} ·{' '}
-                  {screenMeta.resultVariantApplied
-                    ? `本次替换 ${screenMeta.resultVariantRotatedSlots ?? 0} 位`
-                    : '本次保持基准'}
+                  {english
+                    ? `Result variety: ${screenMeta.resultVariantPoolSize} near-score candidates · ${screenMeta.resultVariantApplied ? `${screenMeta.resultVariantRotatedSlots ?? 0} rotated` : 'baseline kept'}`
+                    : `候选差异：近分池 ${screenMeta.resultVariantPoolSize} · ${screenMeta.resultVariantApplied ? `本次替换 ${screenMeta.resultVariantRotatedSlots ?? 0} 位` : '本次保持基准'}`}
                 </span>
               ) : null}
               <span>
-                深度补充：{screenMeta?.dsaEnrichment?.enrichedCount ?? '-'} / {screenMeta?.dsaEnrichment?.requestedCount ?? '-'}
+                {english ? 'Deep enrichment: ' : '深度补充：'}{screenMeta?.dsaEnrichment?.enrichedCount ?? '-'} / {screenMeta?.dsaEnrichment?.requestedCount ?? '-'}
               </span>
             </div>
           </details>
@@ -1871,24 +1991,28 @@ const StockScreeningPage: React.FC = () => {
       {screenMeta && alertMessages.length > 0 ? (
         <InlineAlert
           variant={llmFailed ? 'warning' : 'info'}
-          title={llmFailed ? '当前使用因子排序' : '选股提示'}
+          title={llmFailed ? (english ? 'Using factor ranking' : '当前使用因子排序') : (english ? 'Screening note' : '选股提示')}
           message={<ScreenAlertMessage messages={alertMessages} />}
         />
+      ) : null}
+
+      {watchlistMessage ? (
+        <InlineAlert variant="info" title={english ? 'Watchlist' : '自选股'} message={watchlistMessage} />
       ) : null}
 
       {screenMeta ? (
         <section className="rounded-2xl border border-border bg-card/95 p-4 shadow-soft-card">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <h2 className="text-base font-semibold text-foreground">选股结果</h2>
+            <h2 className="text-base font-semibold text-foreground">{english ? 'Screening results' : '选股结果'}</h2>
           <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs text-secondary-text">
             <Search className="h-4 w-4 text-cyan" />
-            {candidates.length} 条候选
+            {english ? `${candidates.length} candidates` : `${candidates.length} 条候选`}
           </div>
           </div>
 
         {candidates.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-surface/70 px-5 py-10 text-center">
-            <p className="text-sm font-medium text-foreground">暂无符合条件的候选</p>
+            <p className="text-sm font-medium text-foreground">{english ? 'No candidates met the filters.' : '暂无符合条件的候选'}</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
@@ -1896,15 +2020,15 @@ const StockScreeningPage: React.FC = () => {
               <thead className="bg-surface text-left text-xs text-secondary-text">
                 <tr>
                   <th className="w-14 px-4 py-3 font-semibold">#</th>
-                  <th className="px-4 py-3 font-semibold">代码</th>
-                  <th className="px-4 py-3 font-semibold">名称</th>
-                  <th className="px-4 py-3 font-semibold">行业</th>
-                  <th className="px-4 py-3 font-semibold">价格</th>
-                  <th className="px-4 py-3 font-semibold">涨跌幅</th>
-                  <th className="px-4 py-3 font-semibold">评分</th>
-                  <th className="px-4 py-3 font-semibold">排序依据</th>
-                  <th className="px-4 py-3 font-semibold">风险</th>
-                  <th className="px-4 py-3 font-semibold">详情</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Ticker' : '代码'}</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Name' : '名称'}</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Listing / eligibility' : '行业'}</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Price' : '价格'}</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Change' : '涨跌幅'}</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Score' : '评分'}</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Ranking' : '排序依据'}</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Risk' : '风险'}</th>
+                  <th className="px-4 py-3 font-semibold">{english ? 'Details' : '详情'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1921,14 +2045,25 @@ const StockScreeningPage: React.FC = () => {
                         <td className="px-4 py-3 text-secondary-text">{item.rank}</td>
                         <td className="px-4 py-3 font-mono font-semibold text-foreground">{item.code}</td>
                         <td className="px-4 py-3 font-semibold text-foreground">{item.name || '-'}</td>
-                        <td className="px-4 py-3 text-secondary-text">{item.industry || '-'}</td>
-                        <td className="px-4 py-3 text-secondary-text">{formatNumber(item.price)}</td>
+                        <td className="px-4 py-3 text-secondary-text">
+                          {item.exchange || item.currency ? (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span>{[item.exchange, item.currency, item.assetType?.toUpperCase()].filter(Boolean).join(' · ')}</span>
+                              <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${getWealthsimpleClassName(item.wealthsimpleStatus)}`}>
+                                {getWealthsimpleLabel(item.wealthsimpleStatus)}
+                              </span>
+                            </div>
+                          ) : item.industry || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-secondary-text">{item.currency ? `${item.currency} ` : ''}{formatNumber(item.price)}</td>
                         <td className="px-4 py-3 text-secondary-text">{formatNumber(item.changePct)}%</td>
                         <td className="px-4 py-3 font-bold text-cyan">{formatScore(item.score)}</td>
-                        <td className="px-4 py-3 text-secondary-text">{factorRanking ? '因子排序' : formatScore(item.llmScore)}</td>
+                        <td className="px-4 py-3 text-secondary-text">{factorRanking ? (english ? 'Factor score' : '因子排序') : formatScore(item.llmScore)}</td>
                         <td className="px-4 py-3">
                           <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${getRiskClassName(item.riskLevel)}`}>
-                            {getRiskLabel(item.riskLevel)}
+                            {english
+                              ? ({ high: 'High', medium: 'Medium', low: 'Low' }[item.riskLevel || ''] || 'Pending')
+                              : getRiskLabel(item.riskLevel)}
                           </span>
                         </td>
                         <td className="px-4 py-3">
@@ -1937,7 +2072,7 @@ const StockScreeningPage: React.FC = () => {
                             type="button"
                             onClick={() => setExpandedCode(expanded ? null : item.code)}
                           >
-                            {expanded ? '收起' : '展开查看'}
+                            {expanded ? (english ? 'Close' : '收起') : (english ? 'View' : '展开查看')}
                           </button>
                         </td>
                       </tr>
@@ -1947,80 +2082,92 @@ const StockScreeningPage: React.FC = () => {
                             <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                               <div className="space-y-3">
                                 <div>
-                                  <p className="text-xs font-semibold text-secondary-text">摘要</p>
-                                  <p className="mt-1 text-sm leading-6 text-foreground">{getCandidateReason(item)}</p>
+                                  <p className="text-xs font-semibold text-secondary-text">{english ? 'Summary' : '摘要'}</p>
+                                  <p className="mt-1 text-sm leading-6 text-foreground">{getCandidateReason(item, english)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs font-semibold text-secondary-text">操作信号</p>
-                                  <p className="mt-1 text-sm text-foreground">{getSignal(item)}</p>
-                                  <button
-                                    className="mt-2 rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-semibold text-cyan transition-colors hover:bg-cyan/10"
-                                    type="button"
-                                    onClick={() => handleAnalyzeCandidate(item)}
-                                  >
-                                    进一步深度分析
-                                  </button>
+                                  <p className="text-xs font-semibold text-secondary-text">{english ? 'Signal' : '操作信号'}</p>
+                                  <p className="mt-1 text-sm text-foreground">{getSignal(item, english)}</p>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                      className="rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-semibold text-cyan transition-colors hover:bg-cyan/10"
+                                      type="button"
+                                      onClick={() => handleAnalyzeCandidate(item)}
+                                    >
+                                      {english ? 'Run full analysis' : '进一步深度分析'}
+                                    </button>
+                                    <button
+                                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-cyan/40 hover:bg-cyan/10"
+                                      type="button"
+                                      disabled={watchlistCodes.has(item.code.toUpperCase())}
+                                      onClick={() => void handleAddCandidateToWatchlist(item)}
+                                    >
+                                      {watchlistCodes.has(item.code.toUpperCase())
+                                        ? (english ? 'In watchlist' : '已加入自选')
+                                        : (english ? 'Add to watchlist' : '加入自选')}
+                                    </button>
+                                  </div>
                                 </div>
                                 {item.dsaAnalysisSummary ? (
                                   <div>
-                                    <p className="text-xs font-semibold text-secondary-text">增强摘要</p>
+                                    <p className="text-xs font-semibold text-secondary-text">{english ? 'Enriched summary' : '增强摘要'}</p>
                                     <p className="mt-1 text-sm leading-6 text-foreground">
-                                      {formatEnrichmentSummary(item.dsaAnalysisSummary)}
+                                      {formatEnrichmentSummary(item.dsaAnalysisSummary, english)}
                                     </p>
                                   </div>
                                 ) : null}
                                 {llmInsightAvailable ? (
                                   <div>
-                                    <p className="text-xs font-semibold text-secondary-text">智能判断</p>
+                                    <p className="text-xs font-semibold text-secondary-text">{english ? 'Model assessment' : '智能判断'}</p>
                                     <p className="mt-1 text-sm leading-6 text-foreground">{item.llmThesis || item.reason}</p>
                                     <p className="mt-1 text-xs text-secondary-text">
-                                      板块 {item.llmSector || '-'} · 主题 {item.llmTheme || '-'} · 置信度 {formatPercent(item.llmConfidence)}
+                                      {english ? 'Sector' : '板块'} {item.llmSector || '-'} · {english ? 'Theme' : '主题'} {item.llmTheme || '-'} · {english ? 'Confidence' : '置信度'} {formatPercent(item.llmConfidence)}
                                     </p>
                                   </div>
                                 ) : null}
                                 <div>
-                                  <p className="text-xs font-semibold text-secondary-text">风险标签</p>
+                                  <p className="text-xs font-semibold text-secondary-text">{english ? 'Risk flags' : '风险标签'}</p>
                                   <p className="mt-1 text-sm text-foreground">
                                     {[...(item.riskFlags || []), ...(item.llmRisks || [])].length
                                       ? [...(item.riskFlags || []), ...(item.llmRisks || [])].join('，')
-                                      : '无'}
+                                      : (english ? 'None' : '无')}
                                   </p>
                                 </div>
                               </div>
                               <div className="space-y-3">
                                 <div>
-                                  <p className="text-xs font-semibold text-secondary-text">主要因子</p>
+                                  <p className="text-xs font-semibold text-secondary-text">{english ? 'Main factors' : '主要因子'}</p>
                                   <div className="mt-2 grid grid-cols-2 gap-2">
                                     {factors.length > 0 ? (
                                       factors.map(([key, value]) => (
                                         <div key={key} className="rounded-lg border border-border bg-card px-3 py-2">
-                                          <span className="block text-xs text-secondary-text">{FACTOR_LABELS[key] || key}</span>
+                                          <span className="block text-xs text-secondary-text">{(english ? FACTOR_LABELS_EN : FACTOR_LABELS)[key] || key}</span>
                                           <span className="text-sm font-semibold text-foreground">{formatNumber(value)}</span>
                                         </div>
                                       ))
                                     ) : (
-                                      <span className="text-sm text-secondary-text">无因子明细</span>
+                                      <span className="text-sm text-secondary-text">{english ? 'No factor details' : '无因子明细'}</span>
                                     )}
                                   </div>
                                 </div>
                                 <div>
-                                  <p className="text-xs font-semibold text-secondary-text">成交额</p>
-                                  <p className="mt-1 text-sm text-foreground">{formatAmount(item.amount)}</p>
+                                  <p className="text-xs font-semibold text-secondary-text">{english ? 'Trading value' : '成交额'}</p>
+                                  <p className="mt-1 text-sm text-foreground">{formatAmount(item.amount, english)}</p>
                                 </div>
                                 {item.llmWatchItems?.length ? (
                                   <div>
-                                    <p className="text-xs font-semibold text-secondary-text">智能关注项</p>
+                                    <p className="text-xs font-semibold text-secondary-text">{english ? 'Watch items' : '智能关注项'}</p>
                                     <p className="mt-1 text-sm text-foreground">{item.llmWatchItems.join('，')}</p>
                                   </div>
                                 ) : null}
                                 {item.llmCatalysts?.length ? (
                                   <div>
-                                    <p className="text-xs font-semibold text-secondary-text">催化因素</p>
+                                    <p className="text-xs font-semibold text-secondary-text">{english ? 'Catalysts' : '催化因素'}</p>
                                     <p className="mt-1 text-sm text-foreground">{item.llmCatalysts.join('，')}</p>
                                   </div>
                                 ) : null}
                                 <div>
-                                  <p className="text-xs font-semibold text-secondary-text">相关新闻</p>
+                                  <p className="text-xs font-semibold text-secondary-text">{english ? 'Related news' : '相关新闻'}</p>
                                   {dsaNews.length > 0 ? (
                                     <ul className="mt-1 space-y-1 text-sm text-foreground">
                                       {dsaNews.slice(0, 3).map((newsItem, newsIndex) => (
@@ -2030,11 +2177,11 @@ const StockScreeningPage: React.FC = () => {
                                       ))}
                                     </ul>
                                   ) : (
-                                    <p className="mt-1 text-sm text-secondary-text">无</p>
+                                    <p className="mt-1 text-sm text-secondary-text">{english ? 'None' : '无'}</p>
                                   )}
                                 </div>
                                 <div>
-                                  <p className="text-xs font-semibold text-secondary-text">公告与事件</p>
+                                  <p className="text-xs font-semibold text-secondary-text">{english ? 'Filings and events' : '公告与事件'}</p>
                                   {dsaEvents.length > 0 ? (
                                     <ul className="mt-1 space-y-1 text-sm text-foreground">
                                       {dsaEvents.slice(0, 3).map((eventItem, eventIndex) => (
@@ -2044,12 +2191,12 @@ const StockScreeningPage: React.FC = () => {
                                       ))}
                                     </ul>
                                   ) : (
-                                    <p className="mt-1 text-sm text-secondary-text">无</p>
+                                    <p className="mt-1 text-sm text-secondary-text">{english ? 'None' : '无'}</p>
                                   )}
                                 </div>
                                 {dsaWarnings.length > 0 ? (
                                   <div>
-                                    <p className="text-xs font-semibold text-secondary-text">数据补充提示</p>
+                                    <p className="text-xs font-semibold text-secondary-text">{english ? 'Data notes' : '数据补充提示'}</p>
                                     <p className="mt-1 text-sm text-secondary-text">{dsaWarnings.join('，')}</p>
                                   </div>
                                 ) : null}
@@ -2072,7 +2219,7 @@ const StockScreeningPage: React.FC = () => {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Clock3 className="h-4 w-4 text-cyan" />
-            历史记录
+            {english ? 'History' : '历史记录'}
           </div>
           <button
             type="button"
@@ -2080,7 +2227,7 @@ const StockScreeningPage: React.FC = () => {
             onClick={() => void loadHistory()}
             disabled={historyLoading}
           >
-            {historyLoading ? '加载中...' : '刷新'}
+            {historyLoading ? (english ? 'Loading...' : '加载中...') : (english ? 'Refresh' : '刷新')}
           </button>
         </div>
         {historyError ? (
@@ -2088,7 +2235,7 @@ const StockScreeningPage: React.FC = () => {
         ) : null}
         {historyRuns.length === 0 ? (
           <p className="py-3 text-center text-xs text-secondary-text">
-            {historyLoading ? '正在加载历史记录...' : '暂无历史选股记录'}
+            {historyLoading ? (english ? 'Loading screening history...' : '正在加载历史记录...') : (english ? 'No screening history yet' : '暂无历史选股记录')}
           </p>
         ) : (
           <div className="divide-y divide-border/70">
@@ -2101,19 +2248,19 @@ const StockScreeningPage: React.FC = () => {
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-foreground">
-                    {formatHistoryStrategyName(run.strategy, strategies)}
+                    {formatHistoryStrategyName(run.strategy, strategies, english)}
                     <span className="ml-2 text-xs font-normal text-secondary-text">
-                      {formatHistoryMarketLabel(run.market)}
+                      {formatHistoryMarketLabel(run.market, english)}
                     </span>
                   </span>
                   <span className="mt-0.5 block text-xs text-secondary-text">
-                    返回 {run.candidateCount ?? 0} 只
-                    {run.snapshotCount != null ? ` · 快照 ${run.snapshotCount}` : ''}
-                    {run.llmRanked ? ' · 智能重排' : ''}
+                    {english ? `${run.candidateCount ?? 0} results` : `返回 ${run.candidateCount ?? 0} 只`}
+                    {run.snapshotCount != null ? ` · ${english ? 'snapshot' : '快照'} ${run.snapshotCount}` : ''}
+                    {run.llmRanked ? ` · ${english ? 'model ranked' : '智能重排'}` : ''}
                   </span>
                 </span>
                 <span className="shrink-0 text-xs text-secondary-text">
-                  {formatRunCreatedAt(run.createdAt)}
+                  {formatRunCreatedAt(run.createdAt, english)}
                 </span>
               </button>
             ))}

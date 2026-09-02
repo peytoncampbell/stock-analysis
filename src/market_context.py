@@ -66,6 +66,10 @@ _MARKET_ROLES = {
         "zh": "美股",
         "en": "US stock",
     },
+    "ca": {
+        "zh": "加拿大股票",
+        "en": "Canadian stock",
+    },
     "jp": {
         "zh": "日股",
         "en": "Japan stock",
@@ -109,6 +113,16 @@ _MARKET_GUIDELINES = {
         "en": (
             "- This analysis covers a **US stock** (listed on NYSE/NASDAQ).\n"
             "- US stocks have no daily price limits (but have circuit breakers), allow T+0 and pre/after-market trading. Consider USD FX, Fed policy, and SEC regulations."
+        ),
+    },
+    "ca": {
+        "zh": (
+            "- 本次分析对象为 **加拿大股票**（TSX、TSXV、CSE 或 Cboe Canada 上市）。\n"
+            "- 请使用加拿大市场语境，关注加元汇率、加拿大央行政策、行业周期、流动性和加拿大证券监管；不要套用 A 股专属概念。"
+        ),
+        "en": (
+            "- This analysis covers a **Canadian security** listed on the TSX, TSXV, CSE, or Cboe Canada.\n"
+            "- Use Canadian-market context: CAD FX, Bank of Canada policy, sector cycles, liquidity, and Canadian securities regulation; do not apply China A-share-specific concepts."
         ),
     },
     "jp": {

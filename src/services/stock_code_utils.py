@@ -61,7 +61,7 @@ _SUFFIX_DIGIT_LENS: dict = {
     ".TW": (4, 5, 6),
 }
 
-_PRESERVE_SUFFIXES = {".T", ".KS", ".KQ", ".TW", ".TWO"}
+_PRESERVE_SUFFIXES = {".T", ".KS", ".KQ", ".TW", ".TWO", ".TO", ".V", ".CN", ".NE"}
 _US_INDEX_CODES = {
     "SPX",
     "^GSPC",
@@ -202,6 +202,8 @@ def is_code_like(value: str) -> bool:
         return False
     if text.isdigit() and len(text) in (5, 6):
         return True
+    if normalize_suffix_market_symbol(text) is not None:
+        return True
     explicit_parts = _split_explicit_exchange(text)
     if explicit_parts is not None:
         return _normalize_explicit_exchange_parts(explicit_parts) is not None
@@ -230,14 +232,14 @@ def _normalize_code_and_exchange(raw: str) -> tuple[Optional[str], str]:
         return None, ""
     if text.isdigit() and len(text) in (5, 6):
         return text, ""
+    suffix_symbol = normalize_suffix_market_symbol(text)
+    if suffix_symbol is not None:
+        return suffix_symbol, text.rsplit(".", 1)[1]
     explicit_parts = _split_explicit_exchange(text)
     explicit_exchange = explicit_parts[0] if explicit_parts is not None else ""
     explicit_code = _normalize_explicit_exchange_parts(explicit_parts)
     if explicit_parts is not None and explicit_code is None:
         return None, explicit_exchange
-    suffix_symbol = normalize_suffix_market_symbol(text)
-    if suffix_symbol is not None:
-        return suffix_symbol, explicit_exchange
     if any(text.endswith(suffix) for suffix in _PRESERVE_SUFFIXES):
         return None, explicit_exchange
     if re.match(r"^[A-Z]{1,5}(?:\.(?:US|[A-Z]))?$", text):
@@ -455,7 +457,7 @@ def resolve_daily_stock_identity(
         candidates = [raw_code, normalized_code, refill_code]
         if suffix_base_lookup_allowed(normalized_code):
             candidates.append(normalized_code.rsplit(".", 1)[0])
-    if market not in {"jp", "kr", "tw"}:
+    if market not in {"ca", "jp", "kr", "tw"}:
         for candidate in list(candidates):
             candidates.extend(
                 _build_market_code_variants(

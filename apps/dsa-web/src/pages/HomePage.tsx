@@ -6,9 +6,10 @@ import { getParsedApiError, type ParsedApiError } from '../api/error';
 import { analysisApi, DuplicateTaskError } from '../api/analysis';
 import { historyApi } from '../api/history';
 import { agentApi, type SkillInfo } from '../api/agent';
+import { screeningApi, type ScreeningRunDetail } from '../api/screening';
 import { systemConfigApi } from '../api/systemConfig';
 import { ApiErrorAlert, Button, Drawer, EmptyState, InlineAlert } from '../components/common';
-import { DashboardStateBlock } from '../components/dashboard';
+import { DashboardStateBlock, HomeOpportunityDashboard } from '../components/dashboard';
 import { StockAutocomplete } from '../components/StockAutocomplete';
 import { StockHistoryTrendDrawer } from '../components/history';
 import { ReportMarkdownDrawer } from '../components/report/ReportMarkdownDrawer';
@@ -82,6 +83,28 @@ type WatchlistHistoryLookupResult = {
   item: HistoryItem | null;
   failed: boolean;
 };
+
+type WatchlistQuote = {
+  stockCode: string;
+  stockName?: string;
+  market?: string;
+  currency?: string;
+  currentPrice?: number;
+  changePercent?: number;
+};
+
+function getWatchlistExchange(code: string, market?: string): string {
+  const normalized = code.trim().toUpperCase();
+  if (normalized.endsWith('.TO')) return 'TSX';
+  if (normalized.endsWith('.V')) return 'TSXV';
+  if (normalized.endsWith('.CN')) return 'CSE';
+  if (normalized.endsWith('.NE')) return 'Cboe Canada';
+  if (market === 'us') return 'US';
+  if (market === 'hk') return 'HKEX';
+  if (market === 'ca') return 'Canada';
+  if (market === 'cn') return normalized.startsWith('6') ? 'SSE' : 'SZSE';
+  return market?.toUpperCase() || '';
+}
 
 async function lookupWatchlistHistory(
   codes: string[],
@@ -298,7 +321,7 @@ const HomePage: React.FC = () => {
   const [strategyMenuOpen, setStrategyMenuOpen] = useState(false);
   const [runFlowDrawer, setRunFlowDrawer] = useState<RunFlowDrawerState>({ open: false });
   const [duplicateBannerVisible, setDuplicateBannerVisible] = useState(false);
-  const [sidebarWorkspaceTab, setSidebarWorkspaceTab] = useState<HomeWorkspaceTab>('history');
+  const [sidebarWorkspaceTab, setSidebarWorkspaceTab] = useState<HomeWorkspaceTab>('watchlist');
   const [isTaskPanelCollapsed, setIsTaskPanelCollapsed] = useState<boolean>(() => (
     readTaskPanelCollapsedPreference() ?? false
   ));
@@ -352,6 +375,30 @@ const HomePage: React.FC = () => {
 
   useEffect(() => stopMarketReviewPolling, [stopMarketReviewPolling]);
   const [setupStatus, setSetupStatus] = useState<SetupStatusResponse | null>(null);
+  const [opportunityRun, setOpportunityRun] = useState<ScreeningRunDetail | null>(null);
+  const [opportunityLoading, setOpportunityLoading] = useState(true);
+  const [opportunityError, setOpportunityError] = useState('');
+
+  const loadOpportunityDashboard = useCallback(async () => {
+    setOpportunityLoading(true);
+    setOpportunityError('');
+    try {
+      const history = await screeningApi.getHistory({ limit: 1, market: 'wealthsimple' });
+      const latestRun = history.runs[0];
+      setOpportunityRun(latestRun ? await screeningApi.getRun(latestRun.runId) : null);
+    } catch (error: unknown) {
+      setOpportunityError(
+        getParsedApiError(error).message
+          || (uiLanguage === 'en' ? 'Could not load screening results.' : '无法加载选股结果。'),
+      );
+    } finally {
+      setOpportunityLoading(false);
+    }
+  }, [uiLanguage]);
+
+  useEffect(() => {
+    void loadOpportunityDashboard();
+  }, [loadOpportunityDashboard]);
 
   const {
     query,
@@ -626,7 +673,7 @@ const HomePage: React.FC = () => {
         break;
     }
   }, [closeStrategyMenu, focusStrategyItem, strategyOptions.length]);
-  const setupNeedsAction = setupStatus ? !setupStatus.isComplete : false;
+  const setupNeedsAction = setupStatus ? !setupStatus.readyForSmoke : false;
   const setupMissingLabels = useMemo(() => {
     if (!setupStatus) {
       return '';
@@ -708,6 +755,8 @@ const HomePage: React.FC = () => {
   }, [isLoadingStockBar, stockBarItems.length]);
 
   const watchlistState = useWatchlist();
+  const [watchlistQuotes, setWatchlistQuotes] = useState<Map<string, WatchlistQuote>>(new Map());
+  const [watchlistQuotesLoading, setWatchlistQuotesLoading] = useState(false);
   const refreshWatchlist = watchlistState.refresh;
   const watchlistCodesByNormalized = useMemo(() => {
     const codesByNormalized = new Map<string, string>();
@@ -719,6 +768,36 @@ const HomePage: React.FC = () => {
       codesByNormalized.set(key, code);
     }
     return Array.from(codesByNormalized.entries());
+  }, [getWatchlistCodeKey, watchlistState.watchlistCodes]);
+
+  useEffect(() => {
+    const quoteLoader = systemConfigApi.getWatchlistQuotes;
+    if (typeof quoteLoader !== 'function' || watchlistState.watchlistCodes.length === 0) {
+      setWatchlistQuotes(new Map());
+      setWatchlistQuotesLoading(false);
+      return;
+    }
+    let active = true;
+    setWatchlistQuotesLoading(true);
+    void quoteLoader(watchlistState.watchlistCodes)
+      .then((quotes) => {
+        if (!active) return;
+        const next = new Map<string, WatchlistQuote>();
+        for (const quote of quotes) {
+          const key = getWatchlistCodeKey(quote.stockCode);
+          if (key) next.set(key, quote);
+        }
+        setWatchlistQuotes(next);
+      })
+      .catch(() => {
+        if (active) setWatchlistQuotes(new Map());
+      })
+      .finally(() => {
+        if (active) setWatchlistQuotesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [getWatchlistCodeKey, watchlistState.watchlistCodes]);
 
   const stockBarItemByCode = useMemo(() => {
@@ -1156,6 +1235,7 @@ const HomePage: React.FC = () => {
     watchlistState.watchlistCodes.map((code) => {
       const identity = getWatchlistCodeIdentity(code);
       const key = identity.key;
+      const quote = key ? watchlistQuotes.get(key) : undefined;
       const latestItemCandidate = key
         ? stockBarItemByCode.get(key) ?? watchlistHistoryItemsByCode.get(key)
         : undefined;
@@ -1189,6 +1269,12 @@ const HomePage: React.FC = () => {
         : latestItemCandidate;
       return {
         code,
+        name: quote?.stockName,
+        exchange: getWatchlistExchange(code, quote?.market),
+        currency: quote?.currency,
+        currentPrice: quote?.currentPrice,
+        changePercent: quote?.changePercent,
+        quoteStatus: watchlistQuotesLoading ? 'loading' : quote ? 'available' : 'unavailable',
         assetType: identity.assetType,
         // Registry-derived canonical identity: lets the workspace match a
         // canonical selected report against an alias-form raw watchlist row
@@ -1213,6 +1299,8 @@ const HomePage: React.FC = () => {
     watchlistHistoryItemsByCode,
     watchlistHistoryLookupState,
     watchlistMissingHistorySignature,
+    watchlistQuotes,
+    watchlistQuotesLoading,
     watchlistState.watchlistCodes,
   ]);
 
@@ -1761,12 +1849,34 @@ const HomePage: React.FC = () => {
                 onDismiss={clearError}
               />
             ) : null}
+            {!marketReviewReport ? (
+              <HomeOpportunityDashboard
+                run={opportunityRun}
+                loading={opportunityLoading}
+                error={opportunityError}
+                english={uiLanguage === 'en'}
+                watchlistCount={watchlistRows.length}
+                analyzedTodayCount={watchlistAnalyzedTodayCount}
+                activeTaskCount={activeTasks.length}
+                onRefresh={() => void loadOpportunityDashboard()}
+                onOpenScreening={() => navigate('/screening')}
+                onAnalyze={(candidate) => handleSubmitAnalysis(candidate.code, candidate.name, 'manual')}
+              />
+            ) : null}
             {!marketReviewReport && isLoadingReport ? (
-              <div className="flex h-full flex-col items-center justify-center">
+              <div className="flex min-h-64 flex-col items-center justify-center border-t border-border/80">
                 <DashboardStateBlock title={t('home.loadingReport')} loading />
               </div>
             ) : !marketReviewReport && selectedReport ? (
-              <div className={isHistoryTrendOpen ? 'max-w-6xl space-y-4 pb-8' : 'max-w-4xl space-y-4 pb-8'}>
+              <div className={`${isHistoryTrendOpen ? 'max-w-6xl' : 'max-w-4xl'} mt-8 space-y-4 border-t border-border/80 pt-6 pb-8`}>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-text">
+                    {uiLanguage === 'en' ? 'Selected analysis' : '已选分析'}
+                  </p>
+                  <h2 className="mt-1 text-lg font-semibold text-foreground">
+                    {selectedReport.meta.stockName || selectedReport.meta.stockCode}
+                  </h2>
+                </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   {!isMarketReviewHistoryReport ? (
                     <>
