@@ -71,6 +71,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+_site/
 
 local/
 

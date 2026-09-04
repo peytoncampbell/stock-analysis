@@ -43,37 +43,32 @@ def test_canadian_quote_exposes_market_and_currency(monkeypatch) -> None:
     assert quote.currency == "CAD"
 
 
-def test_wealthsimple_snapshot_prefers_canadian_dual_listing(monkeypatch) -> None:
-    columns = {
-        "name": "Shopify",
-        "price": 100.0,
-        "change_pct": 1.0,
-        "amount": 10_000_000.0,
-        "total_mv": 1_000_000_000.0,
-        "circ_mv": 1_000_000_000.0,
-        "pe_ratio": None,
-        "pb_ratio": None,
-        "volume_ratio": 1.0,
-        "turnover_rate": 0.1,
-        "industry": "",
-        "provider_symbol": "",
-        "exchange": "",
-        "asset_type": "stock",
-        "wealthsimple_status": "likely",
-        "verified_at": "2026-09-02T00:00:00Z",
-    }
+def test_wealthsimple_snapshot_checks_every_catalogue_listing(monkeypatch) -> None:
     monkeypatch.setattr(
-        snapshot_us,
-        "fetch_ca_snapshot",
-        lambda: pd.DataFrame([{**columns, "code": "SHOP.TO", "provider_symbol": "SHOP.TO", "exchange": "TSX", "currency": "CAD"}]),
+        "src.services.wealthsimple_catalogue_service.get_wealthsimple_universe_rows",
+        lambda: [
+            {
+                "symbol": "SHOP.TO", "name": "Shopify", "exchange": "TSX",
+                "currency": "CAD", "market": "ca", "asset_type": "stock", "wealthsimple_status": "likely",
+            },
+            {
+                "symbol": "MISSING", "name": "Missing Quote", "exchange": "NASDAQ",
+                "currency": "USD", "market": "us", "asset_type": "stock", "wealthsimple_status": "likely",
+            },
+        ],
     )
     monkeypatch.setattr(
         snapshot_us,
-        "fetch_us_snapshot",
-        lambda: pd.DataFrame([{**columns, "code": "SHOP", "provider_symbol": "SHOP", "exchange": "NASDAQ", "currency": "USD"}]),
+        "_fetch_tradingview_market",
+        lambda _market: [{
+            "symbol": "SHOP.TO", "price": 100.0, "change_pct": 1.0,
+            "volume": 100_000.0, "amount": 10_000_000.0,
+            "total_mv": 1_000_000_000.0, "pe_ratio": 20.0,
+            "pb_ratio": 5.0, "volume_ratio": 1.0, "industry": "Software",
+        }],
     )
 
     result = snapshot_us.fetch_wealthsimple_snapshot()
 
-    assert result["code"].tolist() == ["SHOP.TO"]
+    assert result["code"].tolist() == ["SHOP.TO", "MISSING"]
     assert result.iloc[0]["currency"] == "CAD"

@@ -2,7 +2,7 @@
 # Licensed under Apache-2.0 and modified for daily_stock_analysis.
 name: wealthsimple_core
 display_name: Wealthsimple Core
-description: Liquid Canadian and U.S. stocks and ETFs available on major exchanges, ranked without China-specific filters
+description: Full-catalogue Canadian and U.S. stock and ETF screening for Wealthsimple research
 version: "1.0"
 category: framework
 tags: [wealthsimple, canada, united_states, stocks, etfs]
@@ -21,16 +21,14 @@ screening:
     exclude_st: false
     price_min: 1
     amount_min: 5000000
-    market_cap_min: 300000000
     change_pct_min: -15
     change_pct_max: 15
   tech_weight: 0.35
   factor_weights:
-    momentum: 0.30
-    stability: 0.25
+    momentum: 0.35
+    stability: 0.30
     liquidity: 0.20
     activity: 0.15
-    size: 0.10
   risk_profile:
     chase_change_pct: 8.0
     abnormal_volume_ratio: 5.0

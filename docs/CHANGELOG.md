@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 > For user-friendly release highlights, see the [GitHub Releases](https://github.com/ZhuLinsen/daily_stock_analysis/releases) page.
 
 ## [Unreleased]
+- [新功能] Added a free GitHub Pages stock dashboard refreshed by scheduled GitHub Actions before market open and after market close in Toronto.
 - [新功能] Scheduled analysis now refreshes and saves a full Canadian/U.S. Wealthsimple stock screen at every configured run time, skipping days when both markets are closed.
 - [改进] 首页升级为机会看板：直接展示最新 Wealthsimple 全市场筛选的股票池覆盖、通过数量、排名、价格、涨跌、主要因子、评分和运行状态，并提供刷新、打开选股与单股分析入口。
 - [新功能] 新增 Wealthsimple CA + US 选股：支持加拿大 suffix 行情/交易日历/Prompt、S&P 500 + TSX 60 股票与 ETF 组合池、交易所/币种/资格元数据、加拿大优先的双重上市去重、Watchlist 即时报价，以及 Wealthsimple 成交 CSV 导入。

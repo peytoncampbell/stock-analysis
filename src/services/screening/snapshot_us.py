@@ -13,6 +13,7 @@ rather than silently screening the US pool.
 
 import logging
 import os
+import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from io import StringIO
@@ -166,6 +167,7 @@ def fetch_us_snapshot(
     universe_source: str = "auto",
     max_workers: int = 8,
     market: str = "us",
+    include_reference_data: bool = True,
 ) -> pd.DataFrame:
     """Fetch a US equity snapshot in the screening schema.
 
@@ -174,10 +176,12 @@ def fetch_us_snapshot(
     change_pct, amount, total_mv, pe_ratio, pb_ratio, volume_ratio,
     turnover_rate, industry.
     """
-    import yfinance as yf
-
     if tickers is None:
-        tickers = fetch_ca_universe(universe_source) if market == "ca" else fetch_us_universe(universe_source)
+        if market == "us":
+            return _fetch_catalogue_snapshot(markets={"us"}, scanner_markets=("america",))
+        tickers = fetch_ca_universe(universe_source)
+
+    import yfinance as yf
 
     logger.info("Fetching US snapshot for %d tickers", len(tickers))
 
@@ -222,7 +226,7 @@ def fetch_us_snapshot(
             vol_20d = float(hist["Volume"].tail(20).mean())
             volume_ratio = (volume / vol_20d) if vol_20d > 0 else 1.0
 
-            info = yf.Ticker(ticker).fast_info
+            info = yf.Ticker(ticker).fast_info if include_reference_data else None
             market_cap = getattr(info, "market_cap", None) or 0
             shares = getattr(info, "shares", None) or 0
             turnover_rate = (volume / shares * 100) if shares > 0 else 0.0
@@ -240,6 +244,7 @@ def fetch_us_snapshot(
                 "verified_at": datetime.now(timezone.utc).isoformat(),
                 "price": price,
                 "change_pct": round(change_pct, 2),
+                "volume": volume,
                 "amount": round(volume * price, 0),
                 "total_mv": market_cap,
                 "circ_mv": market_cap,
@@ -287,6 +292,8 @@ def fetch_ca_snapshot(
     universe_source: str = "auto",
     max_workers: int = 8,
 ) -> pd.DataFrame:
+    if tickers is None:
+        return _fetch_catalogue_snapshot(markets={"ca"}, scanner_markets=("canada",))
     return fetch_us_snapshot(
         tickers,
         universe_source=universe_source,
@@ -296,29 +303,329 @@ def fetch_ca_snapshot(
 
 
 def fetch_wealthsimple_snapshot() -> pd.DataFrame:
-    """Combine broad US/Canadian universes and prefer Canadian dual listings."""
-    frames: list[pd.DataFrame] = []
+    """Screen every listing in the exchange-directory Wealthsimple universe."""
+    return _fetch_catalogue_snapshot(
+        markets={"us", "ca"},
+        scanner_markets=("america", "canada"),
+    )
+
+
+def _fetch_catalogue_snapshot(*, markets: set[str], scanner_markets: tuple[str, ...]) -> pd.DataFrame:
+    """Join exchange-directory listings to one broad market-data snapshot."""
+    from src.services.wealthsimple_catalogue_service import get_wealthsimple_universe_rows
+
+    catalogue = [
+        listing
+        for listing in get_wealthsimple_universe_rows()
+        if listing.get("market") in markets
+    ]
+    market_rows: dict[str, dict] = {}
     errors: list[str] = []
-    for market, fetcher in (("ca", fetch_ca_snapshot), ("us", fetch_us_snapshot)):
+    for market in scanner_markets:
         try:
-            frames.append(fetcher())
+            market_rows.update({row["symbol"]: row for row in _fetch_tradingview_market(market)})
         except Exception as exc:
             errors.append(f"{market}: {exc}")
-    if not frames:
-        raise RuntimeError(f"North American snapshots failed: {'; '.join(errors)}")
-    combined = pd.concat(frames, ignore_index=True)
-    combined["_listing_key"] = combined["code"].map(_listing_key)
-    combined["_ca_first"] = combined["currency"].eq("CAD").astype(int)
-    combined = (
-        combined.sort_values(["_listing_key", "_ca_first"], ascending=[True, False])
-        .drop_duplicates("_listing_key", keep="first")
-        .drop(columns=["_listing_key", "_ca_first"])
-        .reset_index(drop=True)
-    )
-    combined.attrs["snapshot_source"] = "yfinance:tsx60+sp500"
+    if not market_rows:
+        raise RuntimeError(f"North American market scanner failed: {'; '.join(errors)}")
+
+    verified_at = datetime.now(timezone.utc).isoformat()
+    rows: list[dict] = []
+    missing = 0
+    for listing in catalogue:
+        quote = market_rows.get(listing["symbol"])
+        if quote is None:
+            missing += 1
+            quote = {}
+        rows.append({
+            "code": listing["symbol"],
+            "provider_symbol": listing["symbol"],
+            "name": listing["name"],
+            "exchange": listing["exchange"],
+            "currency": listing["currency"],
+            "asset_type": quote.get("asset_type") or listing["asset_type"],
+            "wealthsimple_status": listing["wealthsimple_status"],
+            "verified_at": verified_at,
+            "price": quote.get("price"),
+            "change_pct": quote.get("change_pct"),
+            "volume": quote.get("volume"),
+            "amount": quote.get("amount"),
+            "total_mv": quote.get("total_mv"),
+            "circ_mv": quote.get("total_mv"),
+            "pe_ratio": quote.get("pe_ratio"),
+            "pb_ratio": quote.get("pb_ratio"),
+            "volume_ratio": quote.get("volume_ratio"),
+            "turnover_rate": 0.0,
+            "industry": quote.get("industry") or "",
+            "sector": quote.get("sector") or "",
+            **{
+                field: quote.get(field)
+                for field in _TRADINGVIEW_OUTPUT_FIELDS
+            },
+        })
+
+    combined = pd.DataFrame(rows)
+    price_fcf = pd.to_numeric(combined.get("price_fcf"), errors="coerce")
+    combined["fcf_yield"] = (100.0 / price_fcf).where(price_fcf > 0)
+    next_year_eps = pd.to_numeric(combined.get("next_year_eps"), errors="coerce")
+    price = pd.to_numeric(combined.get("price"), errors="coerce")
+    combined["next_year_pe"] = (price / next_year_eps).where(next_year_eps > 0)
+    if missing:
+        errors.append(
+            f"TradingView quote data unavailable for {missing} of {len(catalogue)} catalogue listings"
+        )
+    combined.attrs["snapshot_source"] = f"tradingview:{'+'.join(scanner_markets)}"
     combined.attrs["source_errors"] = errors
-    combined.attrs["fallback_used"] = bool(errors)
+    combined.attrs["fallback_used"] = False
     return combined
+
+
+def _fetch_tradingview_market(market: str) -> list[dict]:
+    columns = [
+        "name", "description", "type", "exchange", "close", "change",
+        "volume", "Value.Traded", "average_volume_30d_calc", "market_cap_basic", "relative_volume_10d_calc",
+        "price_earnings_ttm", "price_book_ratio", "sector", "industry",
+        *_TRADINGVIEW_FIELD_MAP,
+    ]
+    response = requests.post(
+        f"https://scanner.tradingview.com/{market}/scan",
+        json={
+            "filter": [{"left": "type", "operation": "in_range", "right": ["stock", "fund", "dr"]}],
+            "options": {"lang": "en"},
+            "markets": [market],
+            "symbols": {"query": {"types": []}, "tickers": []},
+            "columns": columns,
+            "range": [0, 50_000],
+        },
+        headers={"User-Agent": "stock-analysis/1.0"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        raise RuntimeError(f"TradingView {market} scanner returned an invalid response")
+    suffixes = {"TSX": ".TO", "TSXV": ".V", "CSE": ".CN", "NEO": ".NE"}
+    rows: list[dict] = []
+    for item in payload["data"]:
+        if not isinstance(item, dict):
+            continue
+        values = item.get("d") or []
+        if len(values) != len(columns):
+            continue
+        data = dict(zip(columns, values, strict=True))
+        symbol = str(data["name"] or "").strip().upper().replace(".", "-")
+        if not symbol:
+            continue
+        if market == "canada":
+            suffix = suffixes.get(str(data["exchange"] or "").upper())
+            if suffix is None:
+                continue
+            symbol += suffix
+        price = _finite_snapshot_number(data["close"])
+        average_volume = _finite_snapshot_number(data["average_volume_30d_calc"])
+        rows.append({
+            "symbol": symbol,
+            "asset_type": {"dr": "adr", "fund": "etf"}.get(str(data["type"] or "").lower(), "stock"),
+            "price": price,
+            "change_pct": _finite_snapshot_number(data["change"]),
+            "volume": _finite_snapshot_number(data["volume"]),
+            "amount": price * average_volume if price is not None and average_volume is not None else _finite_snapshot_number(data["Value.Traded"]),
+            "total_mv": _finite_snapshot_number(data["market_cap_basic"]),
+            "volume_ratio": _finite_snapshot_number(data["relative_volume_10d_calc"]),
+            "pe_ratio": _finite_snapshot_number(data["price_earnings_ttm"]),
+            "pb_ratio": _finite_snapshot_number(data["price_book_ratio"]),
+            "sector": str(data["sector"] or ""),
+            "industry": str(data["industry"] or data["sector"] or ""),
+            **{
+                output: _finite_snapshot_number(data[source])
+                for source, output in _TRADINGVIEW_FIELD_MAP.items()
+            },
+        })
+    return rows
+
+
+_TRADINGVIEW_FIELD_MAP = {
+    "enterprise_value_fq": "enterprise_value",
+    "price_earnings_forward": "forward_pe",
+    "price_earnings_growth_ttm": "peg_ratio",
+    "enterprise_value_ebitda_ttm": "ev_ebitda",
+    "enterprise_value_ebit_ttm": "ev_ebit",
+    "price_free_cash_flow_ttm": "price_fcf",
+    "free_cash_flow_ttm": "free_cash_flow",
+    "free_cash_flow_margin_ttm": "fcf_margin",
+    "earnings_yield_fq": "earnings_yield",
+    "price_sales_ttm": "price_sales",
+    "earnings_per_share_diluted_yoy_growth_ttm": "eps_growth",
+    "revenue_growth_ttm": "revenue_growth",
+    "ebitda_growth_ttm": "ebitda_growth",
+    "free_cash_flow_growth_ttm": "fcf_growth",
+    "return_on_invested_capital_fq": "roic",
+    "return_on_equity_fq": "roe",
+    "return_on_assets_fq": "roa",
+    "gross_margin_ttm": "gross_margin",
+    "operating_margin_ttm": "operating_margin",
+    "debt_to_equity_fq": "debt_to_equity",
+    "net_debt_to_ebitda_fq": "net_debt_ebitda",
+    "interest_coverage_fq": "interest_coverage",
+    "current_ratio_fq": "current_ratio",
+    "cash_fq": "cash",
+    "earnings_per_share_diluted_forecast_fy": "current_year_eps",
+    "earnings_per_share_diluted_forecast_next_fy": "next_year_eps",
+    "earnings_per_share_diluted_forecast_next_fy_growth": "next_year_eps_growth",
+    "revenue_forecast_next_fy_growth": "next_year_revenue_growth",
+    "recommendation_mark": "analyst_rating",
+}
+_TRADINGVIEW_OUTPUT_FIELDS = tuple(_TRADINGVIEW_FIELD_MAP.values())
+
+
+def _finite_snapshot_number(value: object) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def enrich_yfinance_consensus(
+    df: pd.DataFrame,
+    *,
+    max_rows: int = 30,
+    max_workers: int = 6,
+) -> pd.DataFrame:
+    """Best-effort consensus and revision enrichment for a ranked shortlist."""
+    import yfinance as yf
+
+    result = df.copy()
+    errors: list[str] = []
+    enriched_count = 0
+
+    def fetch(index: object, row: pd.Series) -> tuple[object, dict[str, float], str]:
+        symbol = str(row.get("provider_symbol") or row.get("code") or "").strip()
+        try:
+            ticker = yf.Ticker(symbol)
+            earnings = ticker.earnings_estimate
+            revenue = ticker.revenue_estimate
+            trends = ticker.eps_trend
+            growth = ticker.growth_estimates
+            history = ticker.earnings_history
+            targets = ticker.analyst_price_targets or {}
+            current_earnings = _table_row(earnings, "0y")
+            next_earnings = _table_row(earnings, "+1y")
+            current_revenue = _table_row(revenue, "0y")
+            next_revenue = _table_row(revenue, "+1y")
+            revision_row = _table_row(trends, "+1y") or _table_row(trends, "0y")
+            current_eps = _finite_snapshot_number(current_earnings.get("avg"))
+            next_eps = _finite_snapshot_number(next_earnings.get("avg"))
+            price = _finite_snapshot_number(row.get("price"))
+            metrics = {
+                "current_year_eps": current_eps,
+                "next_year_eps": next_eps,
+                "forward_pe": price / current_eps if price and current_eps and current_eps > 0 else None,
+                "next_year_pe": price / next_eps if price and next_eps and next_eps > 0 else None,
+                "next_year_eps_growth": _as_percent(next_earnings.get("growth")),
+                "current_year_revenue_growth": _as_percent(current_revenue.get("growth")),
+                "next_year_revenue_growth": _as_percent(next_revenue.get("growth")),
+                "eps_revision_30d": _revision_percent(revision_row, "30daysAgo"),
+                "eps_revision_60d": _revision_percent(revision_row, "60daysAgo"),
+                "eps_revision_90d": _revision_percent(revision_row, "90daysAgo"),
+                "long_term_eps_growth": _growth_value(growth, "LTG", "stockTrend"),
+                "earnings_surprise_avg": _history_average(history, "surprisePercent"),
+                "earnings_beat_rate": _history_beat_rate(history),
+                "analyst_count": _finite_snapshot_number(next_earnings.get("numberOfAnalysts")),
+                "analyst_target_upside": _target_upside(price, targets.get("mean")),
+            }
+            metrics.update(_price_outlook_metrics(price, targets))
+            return index, {key: value for key, value in metrics.items() if value is not None}, ""
+        except Exception as exc:
+            return index, {}, f"{symbol}: {exc}"
+
+    candidates = list(result.head(max(1, max_rows)).iterrows())
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(fetch, index, row) for index, row in candidates]
+        for future in as_completed(futures):
+            index, metrics, error = future.result()
+            if error:
+                errors.append(error)
+            if metrics:
+                enriched_count += 1
+            for field, value in metrics.items():
+                result.at[index, field] = value
+    result.attrs.update(df.attrs)
+    result.attrs["consensus_source"] = "yfinance"
+    result.attrs["consensus_attempted_count"] = len(candidates)
+    result.attrs["consensus_enriched_count"] = enriched_count
+    result.attrs["consensus_errors"] = errors
+    return result
+
+
+def _table_row(table: object, label: str) -> dict:
+    if not isinstance(table, pd.DataFrame) or label not in table.index:
+        return {}
+    row = table.loc[label]
+    return row.to_dict() if hasattr(row, "to_dict") else {}
+
+
+def _as_percent(value: object) -> float | None:
+    number = _finite_snapshot_number(value)
+    return number * 100 if number is not None else None
+
+
+def _revision_percent(row: dict, past_column: str) -> float | None:
+    current = _finite_snapshot_number(row.get("current"))
+    past = _finite_snapshot_number(row.get(past_column))
+    if current is None or past in (None, 0):
+        return None
+    return (current / past - 1) * 100
+
+
+def _growth_value(table: object, row: str, column: str) -> float | None:
+    return _as_percent(_table_row(table, row).get(column))
+
+
+def _history_average(table: object, column: str) -> float | None:
+    if not isinstance(table, pd.DataFrame) or column not in table.columns:
+        return None
+    values = pd.to_numeric(table[column], errors="coerce").dropna()
+    return float(values.mean() * 100) if not values.empty else None
+
+
+def _history_beat_rate(table: object) -> float | None:
+    if not isinstance(table, pd.DataFrame) or "epsDifference" not in table.columns:
+        return None
+    values = pd.to_numeric(table["epsDifference"], errors="coerce").dropna()
+    return float(values.gt(0).mean() * 100) if not values.empty else None
+
+
+def _target_upside(price: float | None, target: object) -> float | None:
+    target_value = _finite_snapshot_number(target)
+    if not price or target_value is None:
+        return None
+    return (target_value / price - 1) * 100
+
+
+def _price_outlook_metrics(price: float | None, targets: object) -> dict[str, float]:
+    """Build transparent price scenarios from the analyst target range."""
+    if not isinstance(targets, dict):
+        return {}
+    current = _finite_snapshot_number(price)
+    mean = _finite_snapshot_number(targets.get("mean"))
+    low = _finite_snapshot_number(targets.get("low"))
+    high = _finite_snapshot_number(targets.get("high"))
+    metrics = {
+        key: value
+        for key, value in {
+            "analyst_target_mean": mean,
+            "analyst_target_low": low,
+            "analyst_target_high": high,
+            "price_estimate_1y": mean,
+            "worst_case_price": low,
+        }.items()
+        if value is not None and value > 0
+    }
+    if current is not None and current > 0 and mean is not None and mean > 0:
+        metrics["price_estimate_1m"] = current + (mean - current) / 12
+        metrics["price_estimate_3m"] = current + (mean - current) / 4
+    return metrics
 
 
 def _listing_key(ticker: str) -> str:

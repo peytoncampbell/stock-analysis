@@ -1,0 +1,80 @@
+name: Publish stock dashboard
+
+on:
+  schedule:
+    # 09:15 and 16:15 America/Toronto across daylight and standard time.
+    - cron: '15 13 * * 1-5'
+    - cron: '15 14 * * 1-5'
+    - cron: '15 20 * * 1-5'
+    - cron: '15 21 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: stock-dashboard-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check Toronto daylight-saving offset
+        id: gate
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" != "schedule" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "${{ github.event.schedule }}" in
+            '15 13 * * 1-5'|'15 20 * * 1-5') expected='-0400' ;;
+            *) expected='-0500' ;;
+          esac
+          [[ "$(TZ=America/Toronto date +%z)" == "$expected" ]] && run=true || run=false
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-python@v6
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Scan and build dashboard
+        if: steps.gate.outputs.run == 'true'
+        env:
+          SCREENING_ENABLED: 'true'
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            python scripts/build_stock_dashboard.py --skip-closed
+          else
+            python scripts/build_stock_dashboard.py
+          fi
+
+      - uses: actions/configure-pages@v5
+        if: steps.gate.outputs.run == 'true' && hashFiles('_site/index.html') != ''
+
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.gate.outputs.run == 'true' && hashFiles('_site/index.html') != ''
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: steps.gate.outputs.run == 'true' && hashFiles('_site/index.html') != ''
+        uses: actions/deploy-pages@v4
