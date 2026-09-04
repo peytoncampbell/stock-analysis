@@ -12,7 +12,7 @@
 """
 
 import logging
-from typing import Optional
+from typing import Literal, Optional
 import re
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, Depends
@@ -23,6 +23,7 @@ from api.v1.schemas.stocks import (
     ExtractFromImageResponse,
     ExtractItem,
     KLineData,
+    StockCatalogueResponse,
     StockHistoryResponse,
     StockProfileResponse,
     StockQuote,
@@ -40,6 +41,7 @@ from src.services.import_parser import (
     parse_import_from_text,
 )
 from src.services.stock_service import StockService
+from src.services.wealthsimple_catalogue_service import get_wealthsimple_catalogue
 from src.services.stock_profile_service import InvalidStockProfileCode, StockProfileService
 from src.services.run_diagnostics import sanitize_diagnostic_text
 from src.services.stock_list_parser import split_stock_list
@@ -410,6 +412,41 @@ def remove_from_watchlist(
             status_code=500,
             detail={"error": "internal_error", "message": f"从自选删除失败: {str(e)}"},
         )
+
+
+@router.get(
+    "/catalogue",
+    response_model=StockCatalogueResponse,
+    summary="Browse the Wealthsimple-focused stock catalogue",
+)
+def get_stock_catalogue(
+    query: str = Query("", max_length=80),
+    market: Literal["all", "ca", "us"] = Query("all"),
+    asset_type: Literal["all", "stock", "etf"] = Query("all"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=10, le=100),
+    refresh: bool = Query(False),
+) -> StockCatalogueResponse:
+    try:
+        return StockCatalogueResponse(
+            **get_wealthsimple_catalogue(
+                query=query,
+                market=market,
+                asset_type=asset_type,
+                page=page,
+                page_size=page_size,
+                refresh=refresh,
+            )
+        )
+    except Exception as exc:
+        logger.error("Wealthsimple catalogue load failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "catalogue_unavailable",
+                "message": "The North American stock catalogue is temporarily unavailable.",
+            },
+        ) from exc
 
 
 @router.get(

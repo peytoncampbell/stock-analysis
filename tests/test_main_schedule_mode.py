@@ -10,7 +10,7 @@ import unittest
 from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from tests.litellm_stub import ensure_litellm_stub
 
@@ -155,11 +155,11 @@ class MainScheduleModeTestCase(unittest.TestCase):
             result = main.run_scheduled_analysis(config, args, ["SHOP.TO"])
 
         self.assertTrue(result)
-        screening.screen.assert_called_once_with(
-            strategy="wealthsimple_core",
-            market="wealthsimple",
-            max_results=100,
-        )
+        self.assertEqual(screening.screen.call_args_list, [
+            call(strategy="wealthsimple_core", market="wealthsimple", max_results=100),
+            call(strategy="institutional_value", market="us", max_results=20),
+            call(strategy="institutional_value", market="ca", max_results=20),
+        ])
         run_full_analysis.assert_called_once_with(
             config,
             args,

@@ -11,6 +11,8 @@ from datetime import datetime
 @dataclass
 class HardFilterConfig:
     exclude_st: bool = True
+    asset_type_whitelist: list[str] | None = None
+    exclude_shells: bool = False
     price_min: float | None = None
     price_max: float | None = None
     amount_min: float | None = None
@@ -204,6 +206,7 @@ class Pick:
     asset_type: str = "stock"
     wealthsimple_status: str = "unknown"
     verified_at: str = ""
+    screening_metrics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

@@ -54,6 +54,7 @@ export type ScreeningCandidate = {
   amount?: number | null;
   industry?: string;
   factorScores?: Record<string, number>;
+  screeningMetrics?: Record<string, number | string>;
   postAnalysisSummaries?: Record<string, string>;
   postAnalysisTags?: string[];
   dsaContext?: {

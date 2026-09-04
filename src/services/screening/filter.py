@@ -11,6 +11,7 @@ import pandas as pd
 from src.services.screening.models import HardFilterConfig
 
 logger = logging.getLogger(__name__)
+_SHELL_NAME_PATTERN = r"\b(?:blank check|special purpose acquisition|acquisition (?:corp(?:oration)?|company|co)\b)"
 _DAILY_FILTER_DEFAULTS = {
     "change_60d_min": None,
     "change_60d_max": None,
@@ -58,6 +59,10 @@ def apply_hard_filters(df: pd.DataFrame, filters: HardFilterConfig) -> pd.DataFr
                 "Missing required snapshot column for exclude_st filter: name"
             )
         mask &= ~result[name_col].str.contains(r"ST|退", na=False)
+
+    mask = _filter_in(result, mask, "asset_type", filters.asset_type_whitelist)
+    if filters.exclude_shells:
+        mask &= _operating_business_mask(result)
 
     # Numeric filters — each is optional
     mask = _filter_min(result, mask, ["amount", "成交额"], filters.amount_min)
@@ -131,6 +136,11 @@ def hard_filter_rejection_summary(
                 "Missing required snapshot column for exclude_st filter: name"
             )
         record("exclude_st", mask & ~df[name_col].str.contains(r"ST|退", na=False))
+
+    if filters.asset_type_whitelist:
+        record("asset_type_whitelist", _filter_in(df, mask, "asset_type", filters.asset_type_whitelist))
+    if filters.exclude_shells:
+        record("exclude_shells", mask & _operating_business_mask(df))
 
     def record_min(label: str, columns: list[str], value: float | None) -> None:
         if value is not None:
@@ -231,6 +241,15 @@ def hard_filter_waterfall(
                 "Missing required snapshot column for exclude_st filter: name"
             )
         record("exclude_st", mask & ~df[name_col].str.contains(r"ST|退", na=False), [name_col])
+
+    if filters.asset_type_whitelist:
+        record(
+            "asset_type_whitelist",
+            _filter_in(df, mask, "asset_type", filters.asset_type_whitelist),
+            ["asset_type"],
+        )
+    if filters.exclude_shells:
+        record("exclude_shells", mask & _operating_business_mask(df), ["name"])
 
     def record_min(label: str, columns: list[str], value: float | None) -> None:
         if value is not None:
@@ -398,10 +417,17 @@ def _filter_in(
         return mask
     if col_name not in df.columns:
         raise SnapshotFieldMissingError(
-            f"Missing required daily feature column for whitelist filter: {col_name}"
+            f"Missing required column for whitelist filter: {col_name}"
         )
     allowed_set = {str(item) for item in allowed}
     return mask & df[col_name].astype(str).isin(allowed_set)
+
+
+def _operating_business_mask(df: pd.DataFrame) -> pd.Series:
+    name_col = _find_col(df, ["name", "股票名称", "名称"])
+    if not name_col:
+        raise SnapshotFieldMissingError("Missing required snapshot column for exclude_shells filter: name")
+    return ~df[name_col].astype(str).str.contains(_SHELL_NAME_PATTERN, case=False, regex=True, na=False)
 
 
 

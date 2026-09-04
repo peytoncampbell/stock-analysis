@@ -792,6 +792,10 @@ def _required_snapshot_fields(filters_config: HardFilterConfig) -> list[str]:
     fields: list[str] = []
     if filters_config.exclude_st:
         fields.append("name")
+    if filters_config.asset_type_whitelist:
+        fields.append("asset_type")
+    if filters_config.exclude_shells:
+        fields.append("name")
     if filters_config.amount_min is not None:
         fields.append("amount")
     if filters_config.price_min is not None or filters_config.price_max is not None:

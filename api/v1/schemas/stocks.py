@@ -56,6 +56,35 @@ class StockQuote(BaseModel):
     })
 
 
+class StockCatalogueItem(BaseModel):
+    symbol: str
+    display_symbol: str
+    name: str
+    market: Literal["ca", "us"]
+    exchange: str
+    currency: Literal["CAD", "USD"]
+    asset_type: Literal["stock", "etf"]
+    wealthsimple_status: Literal["likely"] = "likely"
+    price: Optional[float] = None
+    change_pct: Optional[float] = None
+    volume: Optional[float] = None
+    quote_as_of: Optional[str] = None
+    source: str
+
+
+class StockCatalogueResponse(BaseModel):
+    items: List[StockCatalogueItem] = Field(default_factory=list)
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    refreshed_at: str
+    stale: bool = False
+    source_errors: List[str] = Field(default_factory=list)
+    sources: List[str] = Field(default_factory=list)
+    eligibility_note: str
+
+
 class KLineData(BaseModel):
     """K 线数据点"""
     

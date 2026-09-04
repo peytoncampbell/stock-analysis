@@ -474,6 +474,9 @@ _TRADINGVIEW_FIELD_MAP = {
     "earnings_per_share_diluted_forecast_next_fy_growth": "next_year_eps_growth",
     "revenue_forecast_next_fy_growth": "next_year_revenue_growth",
     "recommendation_mark": "analyst_rating",
+    "price_target_average": "analyst_target_mean",
+    "price_target_high": "analyst_target_high",
+    "price_target_low": "analyst_target_low",
 }
 _TRADINGVIEW_OUTPUT_FIELDS = tuple(_TRADINGVIEW_FIELD_MAP.values())
 

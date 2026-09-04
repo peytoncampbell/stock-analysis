@@ -49,10 +49,7 @@ export async function loadStockIndex(): Promise<IndexLoadResult> {
       ? unpackTuples(data as StockIndexTuple[])
       : data as StockIndexItem[];
 
-    // Registered index rows flow to autocomplete/search/group consumers. The
-    // per-consumer gates (popular keeps stock-only) are enforced by each
-    // consumer, not by a global filter here.
-    const visibleItems = items;
+    const visibleItems = items.filter((item) => item.market === 'US' || item.market === 'CA');
 
     return {
       data: visibleItems,

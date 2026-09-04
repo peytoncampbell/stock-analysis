@@ -8,8 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 > For user-friendly release highlights, see the [GitHub Releases](https://github.com/ZhuLinsen/daily_stock_analysis/releases) page.
 
 ## [Unreleased]
-- [新功能] Added a free GitHub Pages stock dashboard refreshed by scheduled GitHub Actions before market open and after market close in Toronto.
+- [新功能] Added a free GitHub Pages stock dashboard that rescans U.S. and Canadian Institutional Value listings before market open and after market close in Toronto, publishing scores and analyst-target upside ranges.
 - [新功能] Scheduled analysis now refreshes and saves a full Canadian/U.S. Wealthsimple stock screen at every configured run time, skipping days when both markets are closed.
+- [改进] Expanded Institutional Value screening to the full Canadian Wealthsimple catalogue and merged the latest U.S. and Canadian results into the Stocks page's sortable target-upside ranking table.
+- [改进] Redesigned the home value dashboard around a prominent top-ranked stock, an interpretable 100-point score scale, analyst-derived one-month, three-month, one-year, high-target, and downside price scenarios with comparable upside percentages, and a compact comparison table; removed the duplicate home history/watchlist rail.
+- [新功能] Added an Institutional Value strategy that screens the full U.S. exchange-directory universe, excludes ETFs/shells and sub-$2B/illiquid listings, ranks the survivors on valuation, growth, FCF, quality, and balance-sheet evidence, and exposes metric coverage on each stock detail page.
+- [新功能] Added a searchable Wealthsimple stock catalogue for active Nasdaq, NYSE-family, TSX, and TSXV stocks and ETFs, including visible-page quotes and clear estimated-eligibility labelling; removed non-North-American stocks from Web discovery and defaults.
+- [改进] Wealthsimple 选股现在检查完整的北美交易所目录，通过 TradingView 美加市场快照批量补充行情，并明确排除没有可用行情的代码。
+- [改进] 首页优选股票现在可进入运行记录绑定的详情页，查看加权因子贡献、排名原因、风险扣分与补充依据。
 - [改进] 首页升级为机会看板：直接展示最新 Wealthsimple 全市场筛选的股票池覆盖、通过数量、排名、价格、涨跌、主要因子、评分和运行状态，并提供刷新、打开选股与单股分析入口。
 - [新功能] 新增 Wealthsimple CA + US 选股：支持加拿大 suffix 行情/交易日历/Prompt、S&P 500 + TSX 60 股票与 ETF 组合池、交易所/币种/资格元数据、加拿大优先的双重上市去重、Watchlist 即时报价，以及 Wealthsimple 成交 CSV 导入。
 - [修复] 将 litellm 依赖窗口上界收敛到 `<1.99.0`：1.99.0 起把 `prompt_cache_key` 透传给 OpenAI provider，破坏 provider 缓存测试对不透传行为的既有断言（CI backend-tests 3/3 与 backend-gate 失败）；保留历史最低版本与 `!=1.82.7`/`!=1.82.8` 事故排除，同时同步更新各 LLM 兼容文档中写死的依赖约束表述，避免文档与 requirements.txt 漂移

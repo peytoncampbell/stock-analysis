@@ -1196,10 +1196,11 @@ def _run_scheduled_screening(config: Config) -> Optional[Dict[str, Any]]:
     from src.services.screening_service import ScreeningService
     from src.storage import DatabaseManager
 
-    result = ScreeningService(
+    service = ScreeningService(
         config=config,
         db_manager=DatabaseManager.get_instance(),
-    ).screen(
+    )
+    result = service.screen(
         strategy="wealthsimple_core",
         market="wealthsimple",
         max_results=100,
@@ -1209,6 +1210,18 @@ def _run_scheduled_screening(config: Config) -> Optional[Dict[str, Any]]:
         result.get("snapshot_count", 0),
         result.get("candidate_count", 0),
     )
+    for market in ("us", "ca"):
+        value_result = service.screen(
+            strategy="institutional_value",
+            market=market,
+            max_results=20,
+        )
+        logger.info(
+            "Scheduled %s value screen scored %s eligible listings and saved %s candidates",
+            market.upper(),
+            value_result.get("after_filter_count", 0),
+            value_result.get("candidate_count", 0),
+        )
     return result
 
 

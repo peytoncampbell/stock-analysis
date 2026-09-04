@@ -21,8 +21,8 @@ router = APIRouter()
 
 
 class ScreeningScreenRequest(BaseModel):
-    market: str = Field("cn", min_length=1, max_length=16)
-    strategy: str = Field("dual_low", min_length=1, max_length=64)
+    market: str = Field("us", min_length=1, max_length=16)
+    strategy: str = Field("institutional_value", min_length=1, max_length=64)
     max_results: int = Field(20, ge=1, le=100)
     variant_seed: str = Field("", max_length=128)
 

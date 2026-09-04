@@ -1,9 +1,24 @@
-# 市场支持与边界
+# Market support and boundaries
+
+## Wealthsimple stock catalogue
+
+- `GET /api/v1/stocks/catalogue` lists active stocks and ETFs from the official Nasdaq Trader and TMX TSX/TSXV directories, with search, market, asset-type, and pagination filters.
+- The Stocks page fetches quote data only for the visible page and caches exchange directories for six hours.
+- Wealthsimple screening checks every listing in that catalogue against the current TradingView Canada and America market snapshots. Listings without usable quote data remain in the run's snapshot count and are rejected by the hard filters.
+- Ranked stocks on the home dashboard link to a run-specific detail page that explains the weighted factor score, rank, liquidity and price checks, adjustments, risk flags, and available supporting evidence.
+- `likely` means the listing matches Wealthsimple's published exchange and security-type rules. Wealthsimple does not publish a complete tradable-symbol API, so users should confirm final availability in Wealthsimple before placing an order.
+
+## Institutional U.S. and Canadian value screen
+
+- `institutional_value` checks every active Nasdaq Trader or TMX directory listing against the corresponding broad TradingView market snapshot. It keeps common stocks and ADRs with market cap of at least 2 billion and estimated 30-day average daily trading value of at least 5 million in the listing currency (USD for U.S. listings and CAD for Canadian listings).
+- The preliminary 100-point rank uses valuation (25), growth (15), free-cash-flow generation (15), business quality (15), balance sheet (10), estimate revisions (10), catalysts (5), and value-trap safety (5). Missing forward estimates, revisions, catalysts, or normalized-earnings evidence receive a neutral score and remain visibly missing on the detail page.
+- This whole-universe pass is a shortlist, not a buy recommendation. Current filings, consensus revisions, normalized bear/base/bull earnings, intrinsic value, catalysts, and qualitative value-trap research are still required before naming a best stock or entry price.
+- TradingView and exchange-directory availability can be delayed or incomplete. The run records missing quote counts and per-stock fundamental-data coverage; no unavailable value is imputed as fact.
 
 ## 加拿大与 Wealthsimple CA + US 选股
 
 - 加拿大个股使用 Yahoo Finance 后缀：TSX `.TO`、TSXV `.V`、CSE `.CN`、Cboe Canada `.NE`。这些代码进入加拿大行情、`XTSE / America/Toronto` 交易日历、CAD 币种和加拿大市场 Prompt，不再按美股或 A 股处理。
-- Web 选股在英文界面默认提供 `Wealthsimple CA + US`，使用 `wealthsimple_core` 策略扫描 S&P 500、TSX 60 及少量主流美加 ETF；也可单独选择 Canada 或 United States。
+- Web 选股在英文界面默认提供 `Wealthsimple CA + US`，使用 `wealthsimple_core` 策略扫描上述完整目录；也可单独选择 Canada 或 United States。
 - 候选展示名称、provider symbol、交易所、币种、资产类型、资格状态和检查时间。`Likely` 只表示符合 Wealthsimple 公布的交易所/证券类型规则，不表示券商已逐只确认；最终下单前仍应在 Wealthsimple 搜索该证券。
 - 已知双重上市公司在组合池中优先加拿大代码。OTC、期权、共同基金、加密资产和其他非股票/ETF 产品不进入该策略。
 - `SCREENING_CA_TICKERS` / `SCREENING_US_TICKERS` 可覆盖默认股票池。Portfolio CSV 导入新增 `wealthsimple`（别名 `ws`），支持包含日期、Symbol、Buy/Sell、Quantity、Price、Currency 的成交导出；不完整的月结单活动 CSV 会跳过无法还原为成交的行。

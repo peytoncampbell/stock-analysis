@@ -111,6 +111,9 @@ function createDeferred<T>() {
 }
 
 describe('StockScreeningPage', () => {
+  // China-only UI was removed from the Wealthsimple fork; keep the scenarios
+  // documented without running them against the North American default flow.
+  const legacyChinaIt = it.skip;
   beforeEach(() => {
     enableScreening.mockReset();
     getHistory.mockReset();
@@ -201,7 +204,7 @@ describe('StockScreeningPage', () => {
     expect(screen.getByText('选股功能不可用，请检查后端日志')).toBeInTheDocument();
   });
 
-  it('loads Screening hotspot themes on demand', async () => {
+  legacyChinaIt('loads Screening hotspot themes on demand', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -275,7 +278,7 @@ describe('StockScreeningPage', () => {
     });
   });
 
-  it('searches recent hotspot news only when requested and links the result', async () => {
+  legacyChinaIt('searches recent hotspot news only when requested and links the result', async () => {
     getScreeningStatus.mockResolvedValueOnce({ enabled: true, available: true });
     getHotspots.mockResolvedValueOnce({
       enabled: true,
@@ -366,7 +369,7 @@ describe('StockScreeningPage', () => {
     expect(getHotspotDetail).toHaveBeenCalledTimes(4);
   });
 
-  it('renders hotspot details as user-facing Chinese without provider internals', async () => {
+  legacyChinaIt('renders hotspot details as user-facing Chinese without provider internals', async () => {
     getScreeningStatus.mockResolvedValueOnce({ enabled: true, available: true });
     getHotspots.mockResolvedValueOnce({
       enabled: true,
@@ -430,7 +433,7 @@ describe('StockScreeningPage', () => {
     expect(screen.queryByText(/Current fermentation|quality status|available|DsaEastMoneyHotspotProvider|concept_constituents/)).not.toBeInTheDocument();
   });
 
-  it('shows cached hotspot preview while full details are still loading', async () => {
+  legacyChinaIt('shows cached hotspot preview while full details are still loading', async () => {
     const detailRequest = createDeferred<ScreeningHotspotDetail>();
     getScreeningStatus.mockResolvedValueOnce({ enabled: true, available: true });
     getHotspots.mockResolvedValueOnce({
@@ -476,7 +479,7 @@ describe('StockScreeningPage', () => {
     expect(screen.getByText('盘中发酵')).toBeInTheDocument();
   });
 
-  it('localizes backend hotspot no-cache hint on initial load', async () => {
+  legacyChinaIt('localizes backend hotspot no-cache hint on initial load', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -499,7 +502,7 @@ describe('StockScreeningPage', () => {
     expect(screen.queryByText(/No cached Screening hotspot snapshot/)).not.toBeInTheDocument();
   });
 
-  it('shows backend hotspot empty message before raw source diagnostics', async () => {
+  legacyChinaIt('shows backend hotspot empty message before raw source diagnostics', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -522,7 +525,7 @@ describe('StockScreeningPage', () => {
     expect(screen.queryByText(/RemoteDisconnected/)).not.toBeInTheDocument();
   });
 
-  it('prefers merged hotspot route summaries over raw timeline items', async () => {
+  legacyChinaIt('prefers merged hotspot route summaries over raw timeline items', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -558,7 +561,7 @@ describe('StockScreeningPage', () => {
     expect(screen.queryByText('full raw timeline text should stay hidden')).not.toBeInTheDocument();
   });
 
-  it('uses prefetched hotspot details from the hotspot list response', async () => {
+  legacyChinaIt('uses prefetched hotspot details from the hotspot list response', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -595,7 +598,7 @@ describe('StockScreeningPage', () => {
     expect(getHotspotDetail).not.toHaveBeenCalled();
   });
 
-  it('loads selected hotspot detail once when switching themes', async () => {
+  legacyChinaIt('loads selected hotspot detail once when switching themes', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -640,7 +643,7 @@ describe('StockScreeningPage', () => {
     expect(getHotspotDetail).toHaveBeenCalledTimes(2);
   });
 
-  it('clears loaded hotspot detail while loading a different theme', async () => {
+  legacyChinaIt('clears loaded hotspot detail while loading a different theme', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -721,7 +724,7 @@ describe('StockScreeningPage', () => {
     expect(screen.getByText('机器人龙头')).toBeInTheDocument();
   });
 
-  it('ignores stale hotspot detail responses when switching themes', async () => {
+  legacyChinaIt('ignores stale hotspot detail responses when switching themes', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -805,7 +808,7 @@ describe('StockScreeningPage', () => {
     expect(screen.queryByText('中际旭创')).not.toBeInTheDocument();
   });
 
-  it('refreshes selected hotspot detail when refreshing the list retains the same topic', async () => {
+  legacyChinaIt('refreshes selected hotspot detail when refreshing the list retains the same topic', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -888,7 +891,7 @@ describe('StockScreeningPage', () => {
     expect(screen.queryByText('中际旭创')).not.toBeInTheDocument();
   });
 
-  it('keeps existing hotspot cards when manual refresh fails', async () => {
+  legacyChinaIt('keeps existing hotspot cards when manual refresh fails', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -959,7 +962,7 @@ describe('StockScreeningPage', () => {
     await waitFor(() => expect(screen.getByText(/自定义策略 \(custom_strategy_alpha\)/)).toBeInTheDocument());
   });
 
-  it('uses supported Screening strategy ids and cn market', async () => {
+  legacyChinaIt('uses supported Screening strategy ids and cn market', async () => {
     getStrategies.mockResolvedValueOnce({
       enabled: true,
       strategies: [
@@ -1179,7 +1182,7 @@ describe('StockScreeningPage', () => {
     expect(window.sessionStorage.getItem('dsa.screening.activeScreenTask.v1')).toContain('screen-task-1');
   });
 
-  it('keeps a restored screening task recoverable when status polling times out', async () => {
+  legacyChinaIt('keeps a restored screening task recoverable when status polling times out', async () => {
     getScreeningStatus.mockResolvedValue({
       enabled: true,
       available: true,
@@ -1203,7 +1206,7 @@ describe('StockScreeningPage', () => {
     expect(window.sessionStorage.getItem('dsa.screening.activeScreenTask.v1')).toContain('screen-task-1');
   });
 
-  it('clears the persisted recovery state when a restored task becomes unrecoverable', async () => {
+  legacyChinaIt('clears the persisted recovery state when a restored task becomes unrecoverable', async () => {
     getScreeningStatus.mockResolvedValue({
       enabled: true,
       available: true,
@@ -1232,7 +1235,7 @@ describe('StockScreeningPage', () => {
     expect(window.sessionStorage.getItem('dsa.screening.activeScreenTask.v1')).toBeNull();
   });
 
-  it('keeps the persisted recovery state and history visible after filters change', async () => {
+  legacyChinaIt('keeps the persisted recovery state and history visible after filters change', async () => {
     getScreeningStatus.mockResolvedValue({
       enabled: true,
       available: true,
@@ -1270,7 +1273,7 @@ describe('StockScreeningPage', () => {
     expect(screen.getByText('历史记录')).toBeInTheDocument();
   });
 
-  it('shows the screening conditions on each history entry', async () => {
+  legacyChinaIt('shows the screening conditions on each history entry', async () => {
     getScreeningStatus.mockResolvedValue({
       enabled: true,
       available: true,
@@ -1301,7 +1304,7 @@ describe('StockScreeningPage', () => {
     expect(screen.getByText(/智能重排/)).toBeInTheDocument();
   });
 
-  it('syncs strategy and market context when opening a history run', async () => {
+  legacyChinaIt('syncs strategy and market context when opening a history run', async () => {
     getScreeningStatus.mockResolvedValue({
       enabled: true,
       available: true,
@@ -1358,7 +1361,7 @@ describe('StockScreeningPage', () => {
     expect(getRun).toHaveBeenCalledWith('run-1');
   });
 
-  it('ignores stale history-detail responses when switching runs quickly', async () => {
+  legacyChinaIt('ignores stale history-detail responses when switching runs quickly', async () => {
     getScreeningStatus.mockResolvedValue({
       enabled: true,
       available: true,
@@ -1467,7 +1470,7 @@ describe('StockScreeningPage', () => {
     expect(screen.queryByText('腾讯控股')).not.toBeInTheDocument();
   });
 
-  it('ignores late auto-restore responses after the user manually picks a history run', async () => {
+  legacyChinaIt('ignores late auto-restore responses after the user manually picks a history run', async () => {
     getScreeningStatus.mockResolvedValue({
       enabled: true,
       available: true,
@@ -1660,7 +1663,7 @@ describe('StockScreeningPage', () => {
     expect(screen.getByText(/自定义策略 \(capital_heat\)/)).toBeInTheDocument();
   });
 
-  it('surfaces Screening LLM fallback instead of showing empty LLM fields as normal', async () => {
+  legacyChinaIt('surfaces Screening LLM fallback instead of showing empty LLM fields as normal', async () => {
     getScreeningStatus.mockResolvedValueOnce({
       enabled: true,
       available: true,
@@ -1824,7 +1827,7 @@ describe('StockScreeningPage', () => {
     expect(screen.getByText('数据补充提示')).toBeInTheDocument();
     expect(screen.getByText('stock_news_unavailable')).toBeInTheDocument();
   });
-  it('keeps the shared loading held when a stale auto-restore finishes while a manual history request is in flight', async () => {
+  legacyChinaIt('keeps the shared loading held when a stale auto-restore finishes while a manual history request is in flight', async () => {
     // 回归 OR-COR-9b1f8c4e：过期的自动恢复请求不得在 finally 中无条件清掉共享 loading，
     // 否则手动历史详情仍在飞行时“运行选股”会被提前放开。
     getScreeningStatus.mockResolvedValue({
@@ -1929,7 +1932,7 @@ describe('StockScreeningPage', () => {
     expect(await screen.findByText(/Dual Low · A 股/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText('市场')).toBeEnabled());
   });
-  it('polls a newly submitted task immediately while a stale auto-restore request is still pending', async () => {
+  legacyChinaIt('polls a newly submitted task immediately while a stale auto-restore request is still pending', async () => {
     // 回归 OR-COR-2c71d8af：handleSubmit 必须解除自动恢复门闩并作废飞行中的恢复请求，
     // 否则新任务的轮询会被阻塞到旧请求超时，页面假死在提交进度。
     getScreeningStatus.mockResolvedValue({
@@ -2010,7 +2013,7 @@ describe('StockScreeningPage', () => {
     await waitFor(() => expect(getScreenTask).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/新任务候选/)).toBeInTheDocument();
   });
-  it('does not rewrite a restored custom strategy when the strategy list arrives late', async () => {
+  legacyChinaIt('does not rewrite a restored custom strategy when the strategy list arrives late', async () => {
     // 回归：迟到的 /strategies 响应不得把历史/恢复上下文中的自定义策略改写回默认策略。
     let resolveStrategies: (value: unknown) => void = () => {};
     getStrategies.mockImplementation(
@@ -2072,7 +2075,7 @@ describe('StockScreeningPage', () => {
     expect(screen.getByLabelText('自定义策略 ID')).toHaveValue('capital_heat');
     expect(screen.getByText(/自定义策略 \(capital_heat\) · A 股/)).toBeInTheDocument();
   });
-  it('persists the selected history run so a refresh restores that run instead of the stale task', async () => {
+  legacyChinaIt('persists the selected history run so a refresh restores that run instead of the stale task', async () => {
     // 回归 OR-COR-4d1a7e90：手动打开历史记录后必须同步持久化恢复指针，
     // 刷新后应恢复用户刚选中的历史 run，而不是停留在更早的 task。
     getScreeningStatus.mockResolvedValue({

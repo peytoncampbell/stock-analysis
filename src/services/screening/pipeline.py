@@ -323,11 +323,25 @@ def screen(
 
     # 4. Compute screen_score
     df = _sort_screened_candidates(compute_screen_scores(df, screening), screening)
+    if strategy == "institutional_value":
+        from src.services.screening.snapshot_us import enrich_yfinance_consensus
+
+        df = enrich_yfinance_consensus(df, max_rows=min(max(output_count * 2, 30), 50))
+        enriched_count = int(df.attrs.get("consensus_enriched_count", 0))
+        attempted_count = int(df.attrs.get("consensus_attempted_count", 0))
+        degradation.append(
+            f"Yahoo Finance consensus enriched {enriched_count} of {attempted_count} shortlisted candidates"
+        )
+        consensus_errors = [str(item) for item in df.attrs.get("consensus_errors", [])]
+        if consensus_errors:
+            degradation.append(f"Yahoo Finance consensus unavailable for {len(consensus_errors)} candidates")
+        df = _sort_screened_candidates(compute_screen_scores(df, screening), screening)
 
     # 5. Take Top K for LLM ranking
+    llm_cap = config.llm_max_candidates if use_llm and config.has_llm_config() else len(df)
     top_k = min(
         max(output_count * config.llm_candidate_multiplier, output_count),
-        config.llm_max_candidates,
+        llm_cap,
         len(df),
     )
     df_top = df.head(top_k)
@@ -583,6 +597,13 @@ def _df_to_picks(df: pd.DataFrame) -> list[Pick]:
             for factor, col in factor_cols.items()
             if col in df.columns
         }
+        screening_metrics = {
+            field: value
+            for field in _SCREENING_METRIC_FIELDS
+            if (value := _safe_float(row.get(field))) is not None
+        }
+        if sector := _safe_text(row.get("sector")):
+            screening_metrics["sector"] = sector
         picks.append(Pick(
             rank=i + 1,
             code=normalize_code(row.get("code", row.get("代码", "")), allow_ticker=True),
@@ -636,8 +657,23 @@ def _df_to_picks(df: pd.DataFrame) -> list[Pick]:
             daily_quality_flags=_safe_text(row.get("daily_quality_flags")),
             daily_source=_safe_text(row.get("daily_source")),
             factor_scores=factor_scores,
+            screening_metrics=screening_metrics,
         ))
     return picks
+
+
+_SCREENING_METRIC_FIELDS = (
+    "total_mv", "enterprise_value", "forward_pe", "next_year_pe", "pe_ratio", "ev_ebitda", "ev_ebit",
+    "price_fcf", "fcf_yield", "earnings_yield", "peg_ratio", "pb_ratio", "price_sales",
+    "current_year_eps", "next_year_eps", "eps_growth", "next_year_eps_growth", "revenue_growth",
+    "current_year_revenue_growth", "next_year_revenue_growth", "ebitda_growth", "fcf_growth", "free_cash_flow", "fcf_margin",
+    "roic", "roe", "roa", "gross_margin", "operating_margin", "debt_to_equity",
+    "net_debt_ebitda", "interest_coverage", "current_ratio", "cash", "analyst_rating",
+    "eps_revision_30d", "eps_revision_60d", "eps_revision_90d", "long_term_eps_growth",
+    "earnings_surprise_avg", "earnings_beat_rate", "analyst_count", "analyst_target_mean",
+    "analyst_target_low", "analyst_target_high", "analyst_target_upside", "price_estimate_1m",
+    "price_estimate_3m", "price_estimate_1y", "worst_case_price", "fundamental_data_coverage",
+)
 
 
 def _sort_screened_candidates(df: pd.DataFrame, screening=None) -> pd.DataFrame:
@@ -668,6 +704,10 @@ def _sort_screened_candidates(df: pd.DataFrame, screening=None) -> pd.DataFrame:
 def _required_snapshot_columns(filters) -> list[str]:
     columns: list[str] = []
     if filters.exclude_st:
+        columns.append("name")
+    if filters.asset_type_whitelist:
+        columns.append("asset_type")
+    if filters.exclude_shells:
         columns.append("name")
     if filters.amount_min is not None:
         columns.append("amount")

@@ -45,12 +45,11 @@ const QUICK_QUESTIONS: Array<{
   skill: string;
   stockContext?: ActiveStockContext;
 }> = [
-  { label: '用缠论分析茅台', skill: 'chan_theory', stockContext: { stock_code: '600519', stock_name: '贵州茅台' } },
-  { label: '波浪理论看宁德时代', skill: 'wave_theory', stockContext: { stock_code: '300750', stock_name: '宁德时代' } },
-  { label: '分析比亚迪趋势', skill: 'bull_trend', stockContext: { stock_code: '002594', stock_name: '比亚迪' } },
-  { label: '用箱体震荡分析 A 股中芯国际 688981', skill: 'box_oscillation', stockContext: { stock_code: '688981', stock_name: '中芯国际' } },
-  { label: '分析腾讯 hk00700', skill: 'bull_trend', stockContext: { stock_code: 'HK00700', stock_name: '腾讯控股' } },
-  { label: '用情绪周期分析东方财富', skill: 'emotion_cycle', stockContext: { stock_code: '300059', stock_name: '东方财富' } },
+  { label: 'Analyze Apple with wave theory', skill: 'wave_theory', stockContext: { stock_code: 'AAPL', stock_name: 'Apple' } },
+  { label: 'Analyze Microsoft trend', skill: 'bull_trend', stockContext: { stock_code: 'MSFT', stock_name: 'Microsoft' } },
+  { label: 'Analyze Shopify price range', skill: 'box_oscillation', stockContext: { stock_code: 'SHOP.TO', stock_name: 'Shopify' } },
+  { label: 'Analyze Royal Bank trend', skill: 'bull_trend', stockContext: { stock_code: 'RY.TO', stock_name: 'Royal Bank of Canada' } },
+  { label: 'Compare VFV and XEQT', skill: 'wave_theory', stockContext: { stock_code: 'VFV.TO', stock_name: 'Vanguard S&P 500 Index ETF' } },
 ];
 
 const MAX_SELECTED_SKILLS = 3;
@@ -1713,7 +1712,7 @@ const ChatPage: React.FC = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="例如：分析 600519 / 茅台现在适合买入吗？ (Enter 发送, Shift+Enter 换行)"
+                  placeholder="Example: Is SHOP.TO a good buy right now? (Enter to send, Shift+Enter for a new line)"
                   disabled={loading || !agentAvailable}
                   rows={1}
                   className="input-surface input-focus-glow flex-1 min-h-[44px] max-h-[200px] rounded-xl border bg-transparent px-4 py-2.5 text-sm transition-all focus:outline-none resize-none disabled:cursor-not-allowed disabled:opacity-60"

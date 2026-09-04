@@ -17,6 +17,14 @@ _FACTOR_COLUMNS = {
     "size": "factor_size_score",
     "theme_heat": "factor_theme_heat_score",
     "topic_alignment": "factor_topic_alignment_score",
+    "valuation": "factor_valuation_score",
+    "growth": "factor_growth_score",
+    "cash_generation": "factor_cash_generation_score",
+    "quality": "factor_quality_score",
+    "balance_sheet": "factor_balance_sheet_score",
+    "revisions": "factor_revisions_score",
+    "catalysts": "factor_catalysts_score",
+    "value_trap": "factor_value_trap_score",
 }
 _DEFAULT_SCORING_PROFILE = {
     "momentum_base": 60.0,
@@ -106,6 +114,7 @@ def compute_screen_scores(df: pd.DataFrame, config: ScreeningConfig) -> pd.DataF
             result["screen_score"] += factors[factor] * weight
 
     result["screen_score"] = result["screen_score"].clip(0, 100)
+    result["fundamental_data_coverage"] = _fundamental_data_coverage(result).round(1)
 
     return result
 
@@ -148,6 +157,14 @@ def _compute_factor_scores(df: pd.DataFrame, config: ScreeningConfig | None = No
         "size": _compute_size_score(df),
         "theme_heat": _compute_theme_heat_score(df, profile),
         "topic_alignment": _compute_topic_alignment_score(df, profile),
+        "valuation": _compute_institutional_valuation_score(df),
+        "growth": _compute_growth_score(df),
+        "cash_generation": _compute_cash_generation_score(df),
+        "quality": _compute_quality_score(df),
+        "balance_sheet": _compute_balance_sheet_score(df),
+        "revisions": _compute_revisions_score(df),
+        "catalysts": pd.Series(50.0, index=df.index),
+        "value_trap": pd.Series(50.0, index=df.index),
     }
 
 
@@ -202,6 +219,90 @@ def _compute_value_score(df: pd.DataFrame) -> pd.Series:
         score = score * 0.55 + pb_score * 0.45
 
     return score.clip(0, 100)
+
+
+def _compute_institutional_valuation_score(df: pd.DataFrame) -> pd.Series:
+    scores = []
+    for column, ceiling in (
+        ("forward_pe", 200),
+        ("next_year_pe", 200),
+        ("pe_ratio", 500),
+        ("ev_ebitda", 100),
+        ("ev_ebit", 200),
+        ("price_fcf", 200),
+        ("peg_ratio", 20),
+        ("pb_ratio", 50),
+        ("price_sales", 100),
+    ):
+        values = _numeric_column(df, column)
+        scores.append(_rank_score(values.where((values > 0) & (values < ceiling)), lower_is_better=True, na_score=45))
+    return _mean_scores(scores, df.index)
+
+
+def _compute_growth_score(df: pd.DataFrame) -> pd.Series:
+    return _mean_scores([
+        _rank_score(_numeric_column(df, column), lower_is_better=False, na_score=45)
+        for column in (
+            "eps_growth", "revenue_growth", "ebitda_growth", "fcf_growth",
+            "next_year_eps_growth", "next_year_revenue_growth",
+        )
+    ], df.index)
+
+
+def _compute_cash_generation_score(df: pd.DataFrame) -> pd.Series:
+    return _mean_scores([
+        _rank_score(_numeric_column(df, "fcf_yield"), lower_is_better=False, na_score=40),
+        _rank_score(_numeric_column(df, "fcf_margin"), lower_is_better=False, na_score=40),
+    ], df.index)
+
+
+def _compute_quality_score(df: pd.DataFrame) -> pd.Series:
+    return _mean_scores([
+        _rank_score(_numeric_column(df, column), lower_is_better=False, na_score=45)
+        for column in ("roic", "roe", "roa", "gross_margin", "operating_margin", "fcf_margin")
+    ], df.index)
+
+
+def _compute_balance_sheet_score(df: pd.DataFrame) -> pd.Series:
+    score = _mean_scores([
+        _rank_score(_numeric_column(df, "debt_to_equity").where(_numeric_column(df, "debt_to_equity") >= 0), lower_is_better=True),
+        _rank_score(_numeric_column(df, "net_debt_ebitda"), lower_is_better=True),
+        _rank_score(_numeric_column(df, "interest_coverage"), lower_is_better=False),
+        _rank_score(_numeric_column(df, "current_ratio"), lower_is_better=False),
+    ], df.index)
+    labels = (
+        df.get("sector", pd.Series("", index=df.index)).astype(str)
+        + " "
+        + df.get("industry", pd.Series("", index=df.index)).astype(str)
+    )
+    financial = labels.str.contains(r"bank|financial|insurance|reit", case=False, regex=True, na=False)
+    return score.where(~financial, 50.0)
+
+
+def _compute_revisions_score(df: pd.DataFrame) -> pd.Series:
+    columns = ("eps_revision_30d", "eps_revision_60d", "eps_revision_90d")
+    if not any(column in df.columns for column in columns):
+        return pd.Series(50.0, index=df.index)
+    return _mean_scores([
+        _rank_score(_numeric_column(df, column), lower_is_better=False)
+        for column in columns
+    ], df.index)
+
+
+def _mean_scores(scores: list[pd.Series], index: pd.Index) -> pd.Series:
+    if not scores:
+        return pd.Series(50.0, index=index)
+    return pd.concat(scores, axis=1).mean(axis=1).clip(0, 100)
+
+
+def _fundamental_data_coverage(df: pd.DataFrame) -> pd.Series:
+    columns = (
+        "forward_pe", "next_year_pe", "pe_ratio", "ev_ebitda", "ev_ebit", "price_fcf",
+        "peg_ratio", "pb_ratio", "price_sales", "eps_growth", "revenue_growth", "ebitda_growth",
+        "fcf_growth", "fcf_yield", "fcf_margin", "roic", "roe", "roa", "gross_margin",
+        "operating_margin", "debt_to_equity", "net_debt_ebitda", "interest_coverage", "current_ratio",
+    )
+    return pd.concat([_numeric_column(df, column).notna() for column in columns], axis=1).mean(axis=1) * 100
 
 
 def _compute_liquidity_score(df: pd.DataFrame) -> pd.Series:

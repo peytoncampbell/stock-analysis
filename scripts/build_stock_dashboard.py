@@ -25,38 +25,46 @@ def _number(value: Any, digits: int = 1) -> str:
         return "—"
 
 
+def _target_cell(candidate: dict[str, Any], field: str) -> str:
+    current = candidate.get("price")
+    target = (candidate.get("screening_metrics") or {}).get(field)
+    if not isinstance(current, (int, float)) or current <= 0 or not isinstance(target, (int, float)):
+        return '<td data-value="" class="numeric target"><strong>—</strong><span>No coverage</span></td>'
+    upside = (target / current - 1) * 100
+    tone = "gain" if upside >= 0 else "loss"
+    currency = html.escape(str(candidate.get("currency") or ""))
+    return (
+        f'<td data-value="{upside}" class="numeric target">'
+        f'<strong class="{tone}">{upside:+.1f}%</strong><span>{currency} {_number(target, 2)}</span></td>'
+    )
+
+
 def _candidate_rows(candidates: list[dict[str, Any]]) -> str:
     if not candidates:
-        return '<tr><td colspan="8" class="empty">No candidates passed this scan.</td></tr>'
+        return '<tr><td colspan="10" class="empty">No candidates passed this scan.</td></tr>'
 
     rows = []
     for index, candidate in enumerate(candidates):
         code = str(candidate.get("code") or "—")
         name = str(candidate.get("name") or code)
         currency = str(candidate.get("currency") or "")
-        change = candidate.get("change_pct")
-        change_number = float(change) if isinstance(change, (int, float)) else None
-        change_class = "gain" if change_number is not None and change_number >= 0 else "loss"
-        change_text = f"{change_number:+.2f}%" if change_number is not None else "—"
-        exchange = str(candidate.get("exchange") or "—")
-        industry = str(candidate.get("industry") or "—")
-        reason = str(candidate.get("reason") or "Factor ranking")
-        if not reason.isascii():
-            reason = "Factor ranking"
         rank = candidate.get("rank") or index + 1
         score = candidate.get("score")
         price = candidate.get("price")
+        market = str(candidate.get("market") or "").upper() or ("CA" if code.endswith((".TO", ".V")) else "US")
         symbol_url = f"https://finance.yahoo.com/quote/{quote(code, safe='')}"
         rows.append(
             f'''<tr style="--i:{index}">
               <td data-value="{html.escape(str(rank))}" class="rank">{html.escape(str(rank))}</td>
               <td data-value="{html.escape(code)}"><a href="{symbol_url}" target="_blank" rel="noopener noreferrer"><strong>{html.escape(code)}</strong><span>{html.escape(name)}</span></a></td>
-              <td data-value="{html.escape(exchange)}">{html.escape(exchange)}</td>
+              <td data-value="{html.escape(market)}">{html.escape(market)}</td>
               <td data-value="{price if isinstance(price, (int, float)) else ''}" class="numeric">{html.escape(currency)} {_number(price, 2)}</td>
-              <td data-value="{change_number if change_number is not None else ''}" class="numeric {change_class}">{change_text}</td>
               <td data-value="{score if isinstance(score, (int, float)) else ''}" class="numeric score">{_number(score)}</td>
-              <td data-value="{html.escape(industry)}">{html.escape(industry)}</td>
-              <td data-value="{html.escape(reason)}" class="reason">{html.escape(reason)}</td>
+              {_target_cell(candidate, "price_estimate_1m")}
+              {_target_cell(candidate, "price_estimate_3m")}
+              {_target_cell(candidate, "price_estimate_1y")}
+              {_target_cell(candidate, "analyst_target_high")}
+              {_target_cell(candidate, "worst_case_price")}
             </tr>'''
         )
     return "\n".join(rows)
@@ -110,7 +118,7 @@ def render_dashboard(result: dict[str, Any], generated_at: datetime | None = Non
     td a {{ color:var(--text); text-decoration:none; }}
     td a span {{ display:block; max-width:230px; overflow:hidden; color:var(--muted); font-size:12px; text-overflow:ellipsis; white-space:nowrap; }}
     .rank {{ color:var(--muted); }} .numeric {{ text-align:right; font-variant-numeric:tabular-nums; }} .gain {{ color:var(--gain); }} .loss {{ color:var(--loss); }} .score {{ color:var(--accent); font-weight:750; }}
-    .reason {{ max-width:300px; color:var(--muted); font-size:12px; }} .empty {{ padding:50px; color:var(--muted); text-align:center; }}
+    td.target strong, td.target span {{ display:block; }} td.target span {{ color:var(--muted); font-size:11px; }} .empty {{ padding:50px; color:var(--muted); text-align:center; }}
     footer {{ display:flex; justify-content:space-between; gap:28px; margin-top:40px; padding-top:24px; color:var(--muted); border-top:1px solid var(--line); font-size:12px; }}
     @keyframes enter {{ from {{ opacity:0; transform:translateY(7px); }} }}
     @media (max-width:760px) {{ main {{ padding-top:24px; }} nav {{ padding-bottom:24px; }} header {{ grid-template-columns:1fr; padding-top:38px; }} .freshness {{ padding-left:0; border-left:0; }} .stats {{ grid-template-columns:1fr; }} .stat + .stat {{ padding-left:0; border-left:0; border-top:1px solid var(--line); }} .table-head, footer {{ align-items:flex-start; flex-direction:column; }} }}
@@ -121,7 +129,7 @@ def render_dashboard(result: dict[str, Any], generated_at: datetime | None = Non
   <main>
     <nav><a class="brand" href="./">NORTHSTAR / STOCK SCANNER</a><a class="back" href="https://peytoncampbell.ca/">← peytoncampbell.ca</a></nav>
     <header>
-      <div><p class="eyebrow">Canadian + U.S. equities</p><h1>Twice-daily market shortlist.</h1><p class="lede">A factor-ranked view of liquid stocks and ETFs available through major North American exchanges.</p></div>
+      <div><p class="eyebrow">Canadian + U.S. equities</p><h1>Twice-daily value shortlist.</h1><p class="lede">All eligible listings are rescanned before market open and after market close, then ranked by fundamentals and current analyst targets.</p></div>
       <div class="freshness"><span>Last scan</span><strong>{html.escape(updated)}</strong></div>
     </header>
     <section class="stats" aria-label="Scan summary">
@@ -132,7 +140,7 @@ def render_dashboard(result: dict[str, Any], generated_at: datetime | None = Non
     <div class="table-head"><div><p class="eyebrow">Latest ranking</p><h2>Stocks to review</h2></div><p>Click a heading to sort · source: {source}</p></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th><button>Rank</button></th><th><button>Symbol</button></th><th><button>Exchange</button></th><th><button>Price</button></th><th><button>Change</button></th><th><button>Score</button></th><th><button>Industry</button></th><th><button>Why it ranked</button></th></tr></thead>
+        <thead><tr><th><button>Rank</button></th><th><button>Company</button></th><th><button>Market</button></th><th><button>Current</button></th><th><button>Score</button></th><th><button>1M upside</button></th><th><button>3M upside</button></th><th><button>1Y upside</button></th><th><button>High upside</button></th><th><button>Worst case</button></th></tr></thead>
         <tbody>{rows}</tbody>
       </table>
     </div>
@@ -168,11 +176,29 @@ def run_screen(*, skip_closed: bool) -> dict[str, Any] | None:
     from src.config import Config
     from src.services.screening_service import ScreeningService
 
-    return ScreeningService(Config(screening_enabled=True)).screen(
-        strategy="wealthsimple_core",
-        market="wealthsimple",
-        max_results=100,
+    service = ScreeningService(Config(screening_enabled=True))
+    results = []
+    candidates = []
+    for market in ("us", "ca"):
+        result = service.screen(strategy="institutional_value", market=market, max_results=20)
+        results.append(result)
+        candidates.extend({**candidate, "market": market} for candidate in result.get("candidates", []))
+
+    candidates.sort(
+        key=lambda candidate: (
+            (candidate.get("screening_metrics") or {}).get("analyst_target_upside") is not None,
+            (candidate.get("screening_metrics") or {}).get("analyst_target_upside") or float("-inf"),
+        ),
+        reverse=True,
     )
+    for rank, candidate in enumerate(candidates, 1):
+        candidate["rank"] = rank
+    return {
+        "snapshot_count": sum(result.get("snapshot_count", 0) for result in results),
+        "after_filter_count": sum(result.get("after_filter_count", 0) for result in results),
+        "snapshot_source": " + ".join(result.get("snapshot_source", "") for result in results),
+        "candidates": candidates,
+    }
 
 
 def main() -> int:

@@ -1,0 +1,39 @@
+# Broad North American value screen. Qualitative deep research is performed only after ranking.
+name: institutional_value
+display_name: Institutional Value
+description: Ranks liquid U.S. and Canadian common stocks and ADRs above 2B in their listing currency using valuation, growth, cash generation, quality, and balance-sheet evidence
+version: "1.0"
+category: value
+tags: [united_states, canada, stocks, adrs, value, quality, free_cash_flow]
+style:
+  risk_profile: balanced
+  holding_period: multi_year
+  execution_style: normalized_value
+  market_regime: [neutral, risk_off, risk_on]
+  capital_profile: liquid
+  ui_badge: Value
+
+screening:
+  enabled: true
+  market_scope: [us, ca]
+  hard_filters:
+    exclude_st: false
+    asset_type_whitelist: [stock, adr]
+    exclude_shells: true
+    price_min: 1
+    amount_min: 5000000
+    market_cap_min: 2000000000
+  factor_weights:
+    valuation: 0.25
+    growth: 0.15
+    cash_generation: 0.15
+    quality: 0.15
+    balance_sheet: 0.10
+    revisions: 0.10
+    catalysts: 0.05
+    value_trap: 0.05
+  ranking_hints: |
+    This is a preliminary whole-universe rank, not a buy recommendation.
+    Treat missing forward estimates, revisions, catalysts, and normalized earnings as unknown.
+    Deep-research the top 20 using current filings and consensus data before selecting a winner.
+  max_output: 20

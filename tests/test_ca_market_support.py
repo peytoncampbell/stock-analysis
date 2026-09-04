@@ -72,3 +72,66 @@ def test_wealthsimple_snapshot_checks_every_catalogue_listing(monkeypatch) -> No
 
     assert result["code"].tolist() == ["SHOP.TO", "MISSING"]
     assert result.iloc[0]["currency"] == "CAD"
+    assert pd.isna(result.iloc[1]["price"])
+    assert "1 of 2" in result.attrs["source_errors"][0]
+    assert result.attrs["fallback_used"] is False
+
+
+def test_canadian_snapshot_checks_every_canadian_catalogue_listing(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.services.wealthsimple_catalogue_service.get_wealthsimple_universe_rows",
+        lambda: [
+            {"symbol": "SHOP.TO", "name": "Shopify", "exchange": "TSX", "currency": "CAD", "market": "ca", "asset_type": "stock", "wealthsimple_status": "likely"},
+            {"symbol": "THX.V", "name": "Thor Explorations", "exchange": "TSXV", "currency": "CAD", "market": "ca", "asset_type": "stock", "wealthsimple_status": "likely"},
+            {"symbol": "AAPL", "name": "Apple", "exchange": "NASDAQ", "currency": "USD", "market": "us", "asset_type": "stock", "wealthsimple_status": "likely"},
+        ],
+    )
+    monkeypatch.setattr(
+        snapshot_us,
+        "_fetch_tradingview_market",
+        lambda market: [
+            {"symbol": "SHOP.TO", "price": 100.0, "amount": 10_000_000.0, "total_mv": 200_000_000_000.0},
+            {"symbol": "THX.V", "price": 2.0, "amount": 6_000_000.0, "total_mv": 3_000_000_000.0},
+        ] if market == "canada" else [],
+    )
+
+    result = snapshot_us.fetch_ca_snapshot()
+
+    assert result["code"].tolist() == ["SHOP.TO", "THX.V"]
+    assert result["currency"].tolist() == ["CAD", "CAD"]
+    assert result.attrs["snapshot_source"] == "tradingview:canada"
+
+
+def test_institutional_us_snapshot_and_filters_cover_common_stocks_and_adrs(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.services.wealthsimple_catalogue_service.get_wealthsimple_universe_rows",
+        lambda: [
+            {"symbol": "GOOD", "name": "Good Operating Co", "exchange": "NYSE", "currency": "USD", "market": "us", "asset_type": "stock", "wealthsimple_status": "likely"},
+            {"symbol": "ADR", "name": "Global ADR", "exchange": "NASDAQ", "currency": "USD", "market": "us", "asset_type": "stock", "wealthsimple_status": "likely"},
+            {"symbol": "ETF", "name": "Index ETF", "exchange": "NASDAQ", "currency": "USD", "market": "us", "asset_type": "etf", "wealthsimple_status": "likely"},
+            {"symbol": "SPAC", "name": "Example Acquisition Corp", "exchange": "NYSE", "currency": "USD", "market": "us", "asset_type": "stock", "wealthsimple_status": "likely"},
+            {"symbol": "SHOP.TO", "name": "Shopify", "exchange": "TSX", "currency": "CAD", "market": "ca", "asset_type": "stock", "wealthsimple_status": "likely"},
+        ],
+    )
+    monkeypatch.setattr(
+        snapshot_us,
+        "_fetch_tradingview_market",
+        lambda _market: [
+            {"symbol": symbol, "asset_type": asset_type, "price": 20.0, "amount": 10_000_000.0, "total_mv": 3_000_000_000.0}
+            for symbol, asset_type in (("GOOD", "stock"), ("ADR", "adr"), ("ETF", "etf"), ("SPAC", "stock"))
+        ],
+    )
+
+    from src.services.screening.filter import apply_hard_filters
+    from src.services.screening.models import HardFilterConfig
+
+    snapshot = snapshot_us.fetch_us_snapshot()
+    filtered = apply_hard_filters(snapshot, HardFilterConfig(
+        asset_type_whitelist=["stock", "adr"],
+        exclude_shells=True,
+        amount_min=5_000_000,
+        market_cap_min=2_000_000_000,
+    ))
+
+    assert snapshot["code"].tolist() == ["GOOD", "ADR", "ETF", "SPAC"]
+    assert filtered["code"].tolist() == ["GOOD", "ADR"]

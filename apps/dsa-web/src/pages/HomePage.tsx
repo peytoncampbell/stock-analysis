@@ -383,7 +383,7 @@ const HomePage: React.FC = () => {
     setOpportunityLoading(true);
     setOpportunityError('');
     try {
-      const history = await screeningApi.getHistory({ limit: 1, market: 'wealthsimple' });
+      const history = await screeningApi.getHistory({ limit: 1, market: 'us', strategy: 'institutional_value' });
       const latestRun = history.runs[0];
       setOpportunityRun(latestRun ? await screeningApi.getRun(latestRun.runId) : null);
     } catch (error: unknown) {
@@ -1612,7 +1612,7 @@ const HomePage: React.FC = () => {
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="md:hidden -ml-1 flex-shrink-0 rounded-lg p-1.5 text-secondary-text transition-colors hover:bg-hover hover:text-foreground"
+                className="hidden"
                 aria-label={t('home.historyButton')}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1791,7 +1791,7 @@ const HomePage: React.FC = () => {
         ) : null}
 
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          <div className="hidden min-h-0 w-64 shrink-0 flex-col overflow-hidden pl-4 pb-4 md:flex lg:w-72">
+          <div className="hidden">
             {sidebarContent}
           </div>
 
@@ -1860,7 +1860,6 @@ const HomePage: React.FC = () => {
                 activeTaskCount={activeTasks.length}
                 onRefresh={() => void loadOpportunityDashboard()}
                 onOpenScreening={() => navigate('/screening')}
-                onAnalyze={(candidate) => handleSubmitAnalysis(candidate.code, candidate.name, 'manual')}
               />
             ) : null}
             {!marketReviewReport && isLoadingReport ? (

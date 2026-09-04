@@ -16,6 +16,7 @@ const TITLES: Record<string, { title: UiTextKey; description: UiTextKey }> = {
   '/': { title: 'layout.route.home.title', description: 'layout.route.home.description' },
   '/chat': { title: 'layout.route.chat.title', description: 'layout.route.chat.description' },
   '/portfolio': { title: 'layout.route.portfolio.title', description: 'layout.route.portfolio.description' },
+  '/stocks': { title: 'layout.route.stocks.title', description: 'layout.route.stocks.description' },
   '/screening': { title: 'layout.route.screening.title', description: 'layout.route.screening.description' },
   '/backtest': { title: 'layout.route.backtest.title', description: 'layout.route.backtest.description' },
   '/alerts': { title: 'layout.route.alerts.title', description: 'layout.route.alerts.description' },
@@ -30,7 +31,8 @@ export const ShellHeader: React.FC<ShellHeaderProps> = ({
 }) => {
   const location = useLocation();
   const { t } = useUiLanguage();
-  const current = TITLES[location.pathname];
+  const current = TITLES[location.pathname]
+    || (location.pathname.startsWith('/screening/') ? TITLES['/screening'] : undefined);
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/60 bg-background/84 backdrop-blur-xl">

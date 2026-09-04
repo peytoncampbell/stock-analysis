@@ -198,9 +198,9 @@ const PortfolioPage: React.FC = () => {
   const [accountCreateSuccess, setAccountCreateSuccess] = useState<string | null>(null);
   const [accountForm, setAccountForm] = useState({
     name: '',
-    broker: 'Demo',
-    market: 'cn' as PortfolioAccountMarket,
-    baseCurrency: 'CNY',
+    broker: 'Wealthsimple',
+    market: 'ca' as PortfolioAccountMarket,
+    baseCurrency: 'CAD',
   });
   const [costMethod, setCostMethod] = useState<PortfolioCostMethod>('fifo');
   const [snapshot, setSnapshot] = useState<PortfolioSnapshotResponse | null>(null);
@@ -220,7 +220,7 @@ const PortfolioPage: React.FC = () => {
   const [positionAnalysisMessage, setPositionAnalysisMessage] = useState<string | null>(null);
 
   const [brokers, setBrokers] = useState<PortfolioImportBrokerItem[]>([]);
-  const [selectedBroker, setSelectedBroker] = useState('huatai');
+  const [selectedBroker, setSelectedBroker] = useState('wealthsimple');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvDryRun, setCsvDryRun] = useState(true);
   const [csvParsing, setCsvParsing] = useState(false);
@@ -814,7 +814,7 @@ const PortfolioPage: React.FC = () => {
         name,
         broker: accountForm.broker.trim() || undefined,
         market: accountForm.market,
-        baseCurrency: accountForm.baseCurrency.trim() || 'CNY',
+        baseCurrency: accountForm.baseCurrency.trim() || 'CAD',
       });
       await loadAccounts();
       setSelectedAccount(created.id);
@@ -1103,13 +1103,13 @@ const PortfolioPage: React.FC = () => {
             />
             <input
               className={PORTFOLIO_INPUT_CLASS}
-              placeholder="券商（可选，如 Demo/华泰）"
+              placeholder="Broker (for example, Wealthsimple)"
               value={accountForm.broker}
               onChange={(e) => setAccountForm((prev) => ({ ...prev, broker: e.target.value }))}
             />
             <input
               className={PORTFOLIO_INPUT_CLASS}
-              placeholder="基准币（如 CNY/USD/HKD）"
+              placeholder="Base currency (CAD or USD)"
               value={accountForm.baseCurrency}
               onChange={(e) => setAccountForm((prev) => ({ ...prev, baseCurrency: e.target.value.toUpperCase() }))}
             />
@@ -1118,16 +1118,11 @@ const PortfolioPage: React.FC = () => {
               value={accountForm.market}
               onChange={(e) => setAccountForm((prev) => ({ ...prev, market: e.target.value as PortfolioAccountMarket }))}
             >
-              <option value="cn">市场：A 股（cn）</option>
-              <option value="hk">市场：港股（hk）</option>
-              <option value="us">市场：美股（us）</option>
               <option value="ca">Market: Canada (ca)</option>
-              <option value="jp">市场：日股（jp）</option>
-              <option value="kr">市场：韩股（kr）</option>
-              <option value="tw">市场：台股（tw）</option>
+              <option value="us">Market: United States (us)</option>
             </select>
             <button type="submit" className="btn-secondary text-sm" disabled={accountCreating}>
-              {accountCreating ? '创建中...' : '创建账户'}
+              {accountCreating ? 'Creating...' : 'Create account'}
             </button>
           </form>
         </Card>

@@ -42,12 +42,12 @@ import { formatParsedApiError, getParsedApiError, toApiErrorMessage, type Parsed
 import { systemConfigApi } from '../api/systemConfig';
 import { AppPage, Button, InlineAlert, Select } from '../components/common';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
+import { formatEnrichmentSummary } from '../utils/screeningText';
 
 const MARKETS = [
   { id: 'wealthsimple', label: 'Wealthsimple 加美股', enLabel: 'Wealthsimple CA + US' },
   { id: 'ca', label: '加拿大', enLabel: 'Canada' },
   { id: 'us', label: '美股', enLabel: 'United States' },
-  { id: 'cn', label: 'A 股', enLabel: 'China A-shares' },
 ];
 const SCREEN_TASK_STORAGE_KEY = 'dsa.screening.activeScreenTask.v1';
 const SCREEN_TASK_POLL_INTERVAL_MS = 2000;
@@ -79,6 +79,7 @@ const STRATEGY_NAMES_EN: Record<string, string> = {
   shrink_pullback: 'Low-volume pullback',
   volume_breakout: 'Volume breakout',
   wealthsimple_core: 'Wealthsimple Core',
+  institutional_value: 'Institutional Value',
 };
 
 const formatStrategyCategory = (value?: string, english = false) => {
@@ -126,7 +127,7 @@ const formatHistoryStrategyName = (strategyId: string, strategies: ScreeningStra
 // 历史条目里展示筛选条件：市场 ID → 中文标签
 const formatHistoryMarketLabel = (marketId: string | null | undefined, english = false): string => {
   const item = MARKETS.find((candidate) => candidate.id === marketId);
-  return (english ? item?.enLabel : item?.label) || marketId || 'cn';
+  return (english ? item?.enLabel : item?.label) || marketId || 'wealthsimple';
 };
 
 const readPersistedScreenTask = (): PersistedScreenTask | null => {
@@ -142,13 +143,17 @@ const readPersistedScreenTask = (): PersistedScreenTask | null => {
     if (typeof parsed.taskId !== 'string' || !parsed.taskId.trim()) {
       return null;
     }
+    const persistedMarket = typeof parsed.market === 'string' ? parsed.market.trim() : '';
+    if (persistedMarket && !MARKETS.some((item) => item.id === persistedMarket)) {
+      return null;
+    }
     const restoredMaxResults = Number(parsed.maxResults);
     return {
       taskId: parsed.taskId,
       runId: typeof parsed.runId === 'string' && parsed.runId.trim() ? parsed.runId : undefined,
-      market: typeof parsed.market === 'string' && parsed.market.trim() ? parsed.market : 'cn',
-      strategy: typeof parsed.strategy === 'string' && parsed.strategy.trim() ? parsed.strategy : 'dual_low',
-      maxResults: Number.isFinite(restoredMaxResults) ? Math.min(100, Math.max(1, restoredMaxResults)) : 3,
+      market: persistedMarket || 'us',
+      strategy: typeof parsed.strategy === 'string' && parsed.strategy.trim() ? parsed.strategy : 'institutional_value',
+      maxResults: Number.isFinite(restoredMaxResults) ? Math.min(100, Math.max(1, restoredMaxResults)) : 20,
     };
   } catch {
     return null;
@@ -406,21 +411,6 @@ const parseSourceDiagnostic = (value: string) => {
 const normalizeScreenMessageKey = (value: string) => {
   const formatted = formatScreenMessage(value);
   return formatted ? formatted.trim().toLowerCase() : value.trim().toLowerCase();
-};
-
-const formatEnrichmentSummary = (value: string, english = false) => {
-  if (english) {
-    return value
-      .replace(/DSA行情\s*[:：]\s*/gi, 'Quote: ')
-      .replace(/DSA新闻\s*[:：]\s*/gi, 'News: ')
-      .replace(/DSA事件\s*[:：]\s*/gi, 'Events: ')
-      .replace(/现价/g, 'price')
-      .replace(/涨跌幅/g, 'change');
-  }
-  return value
-    .replace(/DSA行情\s*[:：]\s*/gi, '行情：')
-    .replace(/DSA新闻\s*[:：]\s*/gi, '新闻：')
-    .replace(/DSA事件\s*[:：]\s*/gi, '事件：');
 };
 
 const formatScreenMessage = (value: string) => {
@@ -906,10 +896,10 @@ const StockScreeningPage: React.FC = () => {
   const [restoredTask] = useState<PersistedScreenTask | null>(() => readPersistedScreenTask());
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState(false);
-  const [market, setMarket] = useState(restoredTask?.market || (english ? 'wealthsimple' : 'cn'));
-  const [strategy, setStrategy] = useState(restoredTask?.strategy || (english ? 'wealthsimple_core' : 'dual_low'));
+  const [market, setMarket] = useState(restoredTask?.market || 'us');
+  const [strategy, setStrategy] = useState(restoredTask?.strategy || 'institutional_value');
   const [strategies, setStrategies] = useState<ScreeningStrategy[]>([]);
-  const [maxResults, setMaxResults] = useState(restoredTask?.maxResults || (english ? 10 : 3));
+  const [maxResults, setMaxResults] = useState(restoredTask?.maxResults || 20);
   const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set());
   const [watchlistMessage, setWatchlistMessage] = useState('');
   const [candidates, setCandidates] = useState<ScreeningCandidate[]>([]);
@@ -996,7 +986,7 @@ const StockScreeningPage: React.FC = () => {
     setHistoryLoading(true);
     setHistoryError('');
     try {
-      const result = await screeningApi.getHistory({ limit: 10 });
+      const result = await screeningApi.getHistory({ limit: 10, market: 'wealthsimple' });
       setHistoryRuns(result.runs || []);
     } catch (err) {
       setHistoryError(toApiErrorMessage(err, '历史记录加载失败'));

@@ -3782,6 +3782,7 @@ def _normalize_candidate(raw: Any, rank: int) -> Dict[str, Any]:
         "amount": _first_present(item, source, "amount"),
         "industry": item.get("industry") or source.get("industry") or "",
         "factor_scores": item.get("factor_scores") or source.get("factor_scores") or {},
+        "screening_metrics": item.get("screening_metrics") or source.get("screening_metrics") or {},
         "dsa_context": dsa_context,
         "dsa_news": dsa_news,
         "dsa_events": dsa_events,

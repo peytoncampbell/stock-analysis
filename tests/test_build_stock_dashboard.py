@@ -17,11 +17,16 @@ def test_dashboard_renders_summary_candidates_and_escapes_text() -> None:
                     "name": "Shopify <Canada>",
                     "exchange": "TSX",
                     "currency": "CAD",
+                    "market": "ca",
                     "price": 145.5,
-                    "change_pct": 1.25,
                     "score": 88.4,
-                    "industry": "Software",
-                    "reason": "本地后置评分",
+                    "screening_metrics": {
+                        "price_estimate_1m": 150.0,
+                        "price_estimate_3m": 160.0,
+                        "price_estimate_1y": 174.6,
+                        "analyst_target_high": 190.0,
+                        "worst_case_price": 130.0,
+                    },
                 }
             ],
         },
@@ -30,9 +35,10 @@ def test_dashboard_renders_summary_candidates_and_escapes_text() -> None:
 
     assert "8,000" in page
     assert "SHOP.TO" in page
-    assert "+1.25%" in page
+    assert "+20.0%" in page
+    assert "+30.6%" in page
+    assert "-10.7%" in page
     assert "Shopify &lt;Canada&gt;" in page
     assert "market &lt;feed&gt;" in page
-    assert "Factor ranking" in page
-    assert "本地后置评分" not in page
+    assert "1Y upside" in page
     assert "Sep 04, 2026 · 09:15 AM ET" in page
