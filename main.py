@@ -1177,7 +1177,39 @@ def run_scheduled_analysis(
     stock_codes: Optional[List[str]] = None,
 ) -> bool:
     """Run scheduled analysis with failures propagated to the scheduler."""
+    _run_scheduled_screening(config)
     return run_full_analysis(config, args, stock_codes, raise_errors=True)
+
+
+def _run_scheduled_screening(config: Config) -> Optional[Dict[str, Any]]:
+    """Refresh the full Canadian/U.S. screen during each scheduled run."""
+    if not getattr(config, "screening_enabled", False):
+        return None
+
+    if getattr(config, "trading_day_check_enabled", True):
+        from src.core.trading_calendar import get_open_markets_today
+
+        if not {"ca", "us"} & get_open_markets_today():
+            logger.info("Scheduled Wealthsimple screen skipped: Canadian and U.S. markets are closed")
+            return None
+
+    from src.services.screening_service import ScreeningService
+    from src.storage import DatabaseManager
+
+    result = ScreeningService(
+        config=config,
+        db_manager=DatabaseManager.get_instance(),
+    ).screen(
+        strategy="wealthsimple_core",
+        market="wealthsimple",
+        max_results=100,
+    )
+    logger.info(
+        "Scheduled Wealthsimple screen updated %s listings and saved %s candidates",
+        result.get("snapshot_count", 0),
+        result.get("candidate_count", 0),
+    )
+    return result
 
 
 def _run_analysis_with_runtime_scheduler_lock(
@@ -1698,6 +1730,7 @@ def main() -> int:
 
             def scheduled_task():
                 runtime_config = _reload_runtime_config()
+                _run_scheduled_screening(runtime_config)
                 result = run_full_analysis(runtime_config, args, scheduled_stock_codes)
                 if result is False:
                     reason = _LAST_ANALYSIS_FAILURE_REASON or "unknown"

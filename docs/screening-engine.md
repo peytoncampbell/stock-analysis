@@ -24,6 +24,14 @@ SCREENING_CA_TICKERS=SHOP.TO,RY.TO,TD.TO,XEQT.TO
 SCREENING_US_TICKERS=AAPL,MSFT,NVDA,SPY
 ```
 
+When `SCREENING_ENABLED=true` and `SCHEDULE_ENABLED=true`, every configured
+`SCHEDULE_TIMES` run first refreshes the complete Canadian and U.S.
+Wealthsimple screen with `wealthsimple_core`, then runs the existing watchlist
+analysis. Completed rankings are saved in screening history. For a server in
+the Toronto timezone, `SCHEDULE_TIMES=09:15,16:15` scans before the regular
+open and after the regular close. Days when both Canadian and U.S. markets are
+closed are skipped.
+
 Web“基础设置”页展示“选股”开关。开启后左侧显示“选股”入口并允许执行策略、热点和选股任务；关闭后入口隐藏，选股 API 继续拒绝业务请求。
 
 常用可选项：

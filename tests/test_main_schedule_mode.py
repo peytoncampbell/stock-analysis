@@ -133,6 +133,40 @@ class MainScheduleModeTestCase(unittest.TestCase):
         defaults.update(overrides)
         return _DummyConfig(**defaults)
 
+    def test_scheduled_run_refreshes_full_wealthsimple_screen_before_analysis(self) -> None:
+        config = self._make_config(
+            screening_enabled=True,
+            trading_day_check_enabled=True,
+        )
+        screening = MagicMock()
+        screening.screen.return_value = {"snapshot_count": 8000, "candidate_count": 100}
+        args = self._make_args()
+
+        with patch(
+            "src.core.trading_calendar.get_open_markets_today",
+            return_value={"ca", "us"},
+        ), patch(
+            "src.services.screening_service.ScreeningService",
+            return_value=screening,
+        ), patch(
+            "src.storage.DatabaseManager.get_instance",
+            return_value=MagicMock(),
+        ), patch("main.run_full_analysis", return_value=True) as run_full_analysis:
+            result = main.run_scheduled_analysis(config, args, ["SHOP.TO"])
+
+        self.assertTrue(result)
+        screening.screen.assert_called_once_with(
+            strategy="wealthsimple_core",
+            market="wealthsimple",
+            max_results=100,
+        )
+        run_full_analysis.assert_called_once_with(
+            config,
+            args,
+            ["SHOP.TO"],
+            raise_errors=True,
+        )
+
     def test_daily_market_context_target_date_routes_jp_kr_calendars(self) -> None:
         current_time = datetime(2026, 5, 7, 0, 30, tzinfo=timezone.utc)
         calls = []
